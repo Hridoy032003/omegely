@@ -74,7 +74,7 @@ export default function VideoChat() {
   const knownCountry = partnerCountry && partnerCountry !== "XX";
 
   return (
-    <main className="relative mx-auto flex min-h-[100dvh] max-w-6xl flex-col gap-3 p-3 sm:gap-4 sm:p-4">
+    <main className="relative mx-auto flex h-[100dvh] max-w-6xl flex-col gap-3 overflow-hidden p-3 sm:gap-4 sm:p-4">
       {/* ambient background */}
       <div className="pointer-events-none fixed inset-0 -z-10">
         <div className="absolute left-1/2 top-[-15%] h-[440px] w-[720px] -translate-x-1/2 rounded-full bg-indigo-600/15 blur-[120px]" />
