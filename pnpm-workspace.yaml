@@ -1,2 +1,8 @@
+# Build-script decisions. core-js's only postinstall prints a funding notice,
+# so we explicitly skip it (Next.js uses SWC and needs no dependency builds).
 allowBuilds:
-  esbuild: set this to true or false
+  core-js: false
+
+# posthog-js is newer than the global minimum-release-age policy; allow it.
+minimumReleaseAgeExclude:
+  - posthog-js@1.430.3
