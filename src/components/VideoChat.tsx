@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useWebRTC } from "@/hooks/useWebRTC";
 import { countryFlag } from "@/lib/flag";
 import { LogoMark } from "@/components/logo";
 import SearchingIndicator from "@/components/SearchingIndicator";
 import ChatPanel from "./ChatPanel";
 import {
+  MessageCircle,
   Mic,
   MicOff,
   SkipForward,
@@ -47,10 +48,33 @@ export default function VideoChat() {
     if (status !== "connected") setRemoteReady(false);
   }, [status]);
 
+  // Mobile: chat lives in a slide-up sheet with an unread badge.
+  const [chatOpen, setChatOpen] = useState(false);
+  const [unread, setUnread] = useState(0);
+  const seenCount = useRef(0);
+
+  useEffect(() => {
+    if (messages.length === 0) {
+      seenCount.current = 0;
+      setUnread(0);
+      return;
+    }
+    if (chatOpen) {
+      seenCount.current = messages.length;
+      setUnread(0);
+      return;
+    }
+    const fresh = messages
+      .slice(seenCount.current)
+      .filter((m) => m.from === "them").length;
+    seenCount.current = messages.length;
+    if (fresh) setUnread((u) => u + fresh);
+  }, [messages, chatOpen]);
+
   const knownCountry = partnerCountry && partnerCountry !== "XX";
 
   return (
-    <main className="relative mx-auto flex min-h-screen max-w-6xl flex-col gap-4 p-4">
+    <main className="relative mx-auto flex min-h-[100dvh] max-w-6xl flex-col gap-3 p-3 sm:gap-4 sm:p-4">
       {/* ambient background */}
       <div className="pointer-events-none fixed inset-0 -z-10">
         <div className="absolute left-1/2 top-[-15%] h-[440px] w-[720px] -translate-x-1/2 rounded-full bg-indigo-600/15 blur-[120px]" />
@@ -65,20 +89,38 @@ export default function VideoChat() {
           <LogoMark className="h-8 w-8" title="Omegley" />
           Omegley
         </Link>
-        <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-neutral-300">
-          <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-75" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-          </span>
-          {onlineCount} online
+
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-neutral-300">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-75" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+            </span>
+            {onlineCount} online
+          </div>
+
+          {/* Mobile-only chat toggle */}
+          <button
+            onClick={() => setChatOpen(true)}
+            disabled={!isConnected}
+            aria-label="Open chat"
+            className="relative inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-white/10 bg-white/5 text-neutral-200 transition hover:bg-white/10 disabled:opacity-40 md:hidden"
+          >
+            <MessageCircle className="h-4 w-4" />
+            {unread > 0 && (
+              <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-indigo-500 px-1 text-[10px] font-semibold text-white">
+                {unread > 9 ? "9+" : unread}
+              </span>
+            )}
+          </button>
         </div>
       </header>
 
-      <div className="grid flex-1 gap-4 md:grid-cols-[1fr_340px]">
+      <div className="grid min-h-0 flex-1 gap-4 md:grid-cols-[1fr_340px]">
         {/* Video stage */}
-        <section className="flex min-h-0 flex-col gap-4">
+        <section className="flex min-h-0 flex-col gap-3 sm:gap-4">
           <div
-            className={`relative flex-1 overflow-hidden rounded-3xl border bg-black transition-colors ${
+            className={`relative min-h-0 flex-1 overflow-hidden rounded-3xl border bg-black transition-colors ${
               isConnected ? "border-indigo-500/40" : "border-white/10"
             }`}
           >
@@ -145,7 +187,7 @@ export default function VideoChat() {
               autoPlay
               playsInline
               muted
-              className="absolute bottom-3 right-3 h-28 w-40 rounded-xl border border-white/15 bg-neutral-900 object-cover shadow-lg ring-1 ring-black/30"
+              className="absolute bottom-3 right-3 h-24 w-32 rounded-xl border border-white/15 bg-neutral-900 object-cover shadow-lg ring-1 ring-black/30 sm:h-28 sm:w-40"
             />
             {!isIdle && (
               <span className="absolute bottom-4 left-3 rounded-md bg-black/50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-neutral-300 backdrop-blur">
@@ -168,7 +210,7 @@ export default function VideoChat() {
               <div className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 p-1.5 backdrop-blur">
                 <button
                   onClick={next}
-                  className="inline-flex cursor-pointer items-center gap-2 rounded-full bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-500"
+                  className="inline-flex cursor-pointer items-center gap-2 rounded-full bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-500 sm:px-6"
                 >
                   <SkipForward className="h-4 w-4" />
                   {isConnected ? "Next" : "Skip"}
@@ -204,8 +246,8 @@ export default function VideoChat() {
           </div>
         </section>
 
-        {/* Chat */}
-        <aside className="min-h-[320px] md:min-h-0">
+        {/* Chat — desktop side panel only */}
+        <aside className="hidden md:block">
           <ChatPanel
             messages={messages}
             disabled={!isConnected}
@@ -214,7 +256,7 @@ export default function VideoChat() {
         </aside>
       </div>
 
-      <footer className="pb-2 text-center text-xs text-neutral-600">
+      <footer className="hidden pb-1 text-center text-xs text-neutral-600 sm:block">
         Be kind. Conversations are peer-to-peer and not stored anywhere. You must
         be 18+ ·{" "}
         <Link
@@ -224,6 +266,38 @@ export default function VideoChat() {
           Community Guidelines
         </Link>
       </footer>
+
+      {/* Mobile chat bottom sheet */}
+      <div
+        className={`fixed inset-0 z-50 md:hidden ${
+          chatOpen ? "" : "pointer-events-none"
+        }`}
+        aria-hidden={!chatOpen}
+      >
+        {/* backdrop */}
+        <div
+          onClick={() => setChatOpen(false)}
+          className={`absolute inset-0 bg-black/60 transition-opacity duration-300 ${
+            chatOpen ? "opacity-100" : "opacity-0"
+          }`}
+        />
+        {/* sheet */}
+        <div
+          className={`absolute inset-x-0 bottom-0 flex h-[78dvh] flex-col rounded-t-2xl border-t border-white/10 bg-neutral-950 p-3 shadow-2xl transition-transform duration-300 ease-out ${
+            chatOpen ? "translate-y-0" : "translate-y-full"
+          }`}
+        >
+          <div className="mx-auto mb-2 h-1 w-10 shrink-0 rounded-full bg-white/15" />
+          <div className="min-h-0 flex-1">
+            <ChatPanel
+              messages={messages}
+              disabled={!isConnected}
+              onSend={sendMessage}
+              onClose={() => setChatOpen(false)}
+            />
+          </div>
+        </div>
+      </div>
     </main>
   );
 }
