@@ -52,6 +52,7 @@ export default function VideoChat() {
   const [chatOpen, setChatOpen] = useState(false);
   const [unread, setUnread] = useState(0);
   const seenCount = useRef(0);
+  const swipeStart = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     if (messages.length === 0) {
@@ -70,6 +71,27 @@ export default function VideoChat() {
     seenCount.current = messages.length;
     if (fresh) setUnread((u) => u + fresh);
   }, [messages, chatOpen]);
+
+  // On mobile, swiping up on the video behaves like a short-form video feed:
+  // leave the current stranger and immediately search for the next one.
+  const handleVideoTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
+    if (event.touches.length !== 1) return;
+    const touch = event.touches[0];
+    swipeStart.current = { x: touch.clientX, y: touch.clientY };
+  };
+
+  const handleVideoTouchEnd = (event: React.TouchEvent<HTMLDivElement>) => {
+    const start = swipeStart.current;
+    swipeStart.current = null;
+    if (!start || status === "idle") return;
+
+    const touch = event.changedTouches[0];
+    const deltaX = touch.clientX - start.x;
+    const deltaY = touch.clientY - start.y;
+    const isVerticalSwipe = Math.abs(deltaY) > 64 && Math.abs(deltaY) > Math.abs(deltaX) * 1.2;
+
+    if (isVerticalSwipe && deltaY < 0) next();
+  };
 
   const knownCountry = partnerCountry && partnerCountry !== "XX";
 
@@ -120,7 +142,12 @@ export default function VideoChat() {
         {/* Video stage */}
         <section className="flex min-h-0 flex-col gap-3 sm:gap-4">
           <div
-            className={`relative min-h-0 flex-1 overflow-hidden rounded-3xl border bg-black transition-colors ${
+            onTouchStart={handleVideoTouchStart}
+            onTouchEnd={handleVideoTouchEnd}
+            onTouchCancel={() => {
+              swipeStart.current = null;
+            }}
+            className={`relative min-h-0 flex-1 touch-none overflow-hidden rounded-3xl border bg-black transition-colors ${
               isConnected ? "border-indigo-500/40" : "border-white/10"
             }`}
           >
@@ -178,6 +205,14 @@ export default function VideoChat() {
                 <p className="text-sm text-neutral-300">
                   Connecting{knownCountry ? ` to ${partnerCountry}` : ""}…
                 </p>
+              </div>
+            )}
+
+            {/* TikTok-style mobile gesture hint. The button remains available for keyboard and desktop users. */}
+            {isConnected && remoteReady && (
+              <div className="pointer-events-none absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full bg-black/45 px-3 py-1.5 text-[11px] text-neutral-300 backdrop-blur sm:hidden">
+                <span aria-hidden="true">↑</span>
+                Swipe up for next
               </div>
             )}
 
