@@ -154,7 +154,7 @@ export default function Home() {
             <div className="animate-fadeUp">
               <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-neutral-300">
                 <Sparkles className="h-3.5 w-3.5 text-indigo-300" />
-                No sign-up · No downloads · Free forever
+                No sign-up · Browser or installable app · Free forever
               </span>
 
               <h1 className="mt-6 font-display text-4xl font-extrabold leading-[1.05] tracking-tight text-white sm:text-5xl lg:text-6xl">
@@ -182,6 +182,12 @@ export default function Home() {
                   className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-full border border-white/15 px-7 py-3.5 text-base font-medium text-white transition hover:bg-white/5"
                 >
                   See how it works
+                </a>
+                <a
+                  href={process.env.NEXT_PUBLIC_PWA_URL ?? "https://omegley-pwa.vercel.app"}
+                  className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-full border border-indigo-400/30 bg-indigo-400/10 px-7 py-3.5 text-base font-medium text-indigo-200 transition hover:bg-indigo-400/20"
+                >
+                  Install mobile app
                 </a>
               </div>
 

@@ -10,6 +10,7 @@ interface BeforeInstallPromptEvent extends Event {
 export default function InstallPrompt() {
   const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [installed, setInstalled] = useState(false);
+  const [ios, setIos] = useState(false);
 
   useEffect(() => {
     const onInstall = (event: Event) => {
@@ -24,6 +25,7 @@ export default function InstallPrompt() {
 
     window.addEventListener("beforeinstallprompt", onInstall);
     window.addEventListener("appinstalled", onInstalled);
+    setIos(/iphone|ipad|ipod/i.test(navigator.userAgent));
     void navigator.serviceWorker?.register("/sw.js");
 
     return () => {
@@ -32,7 +34,20 @@ export default function InstallPrompt() {
     };
   }, []);
 
-  if (installed || !installEvent) return null;
+  if (installed) return null;
+
+  if (!installEvent) {
+    return (
+      <div className="install-card" role="status">
+        <strong>Install Omegley on your phone</strong>
+        <span>
+          {ios
+            ? "Tap Share, then Add to Home Screen."
+            : "Open your browser menu and choose Install app or Add to Home screen."}
+        </span>
+      </div>
+    );
+  }
 
   return (
     <button

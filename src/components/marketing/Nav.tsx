@@ -53,6 +53,12 @@ export default function Nav() {
         </div>
 
         <div className="hidden items-center gap-3 md:flex">
+          <a
+            href={process.env.NEXT_PUBLIC_PWA_URL ?? "https://omegley-pwa.vercel.app"}
+            className="rounded-full border border-white/15 px-4 py-2 text-sm text-neutral-200 transition hover:bg-white/5"
+          >
+            Install app
+          </a>
           <Link
             href="/chat"
             className="group inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-white px-5 py-2 text-sm font-semibold text-neutral-950 transition hover:bg-neutral-200"
@@ -92,6 +98,12 @@ export default function Nav() {
               Start free
               <ArrowRight className="h-4 w-4" />
             </Link>
+            <a
+              href={process.env.NEXT_PUBLIC_PWA_URL ?? "https://omegley-pwa.vercel.app"}
+              className="mt-2 inline-flex cursor-pointer items-center justify-center rounded-full border border-white/15 px-5 py-3 text-sm font-medium text-white"
+            >
+              Install mobile app
+            </a>
           </div>
         </div>
       )}

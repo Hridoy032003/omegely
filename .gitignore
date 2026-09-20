@@ -2,6 +2,7 @@ node_modules
 .next
 out
 .env*
+!.env.local.example
 !apps/**/.env.example
 !packages/**/.env.example
 .DS_Store
