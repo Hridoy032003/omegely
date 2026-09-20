@@ -29,13 +29,13 @@ const STATS = [
 const FEATURES = [
   {
     icon: Zap,
-    title: "Instant matching",
-    body: "Click once and you're talking to someone new in seconds. No forms, no lobbies, no waiting.",
+    title: "Instant random matching",
+    body: "Start a random chat with someone new in seconds. No forms, no lobbies, and no account to create.",
   },
   {
     icon: Video,
-    title: "Crisp video & voice",
-    body: "Real-time HD video and audio powered by WebRTC — the same tech behind pro video apps.",
+    title: "Video chat with strangers",
+    body: "Talk face-to-face with real-time video and voice in your browser, powered by modern WebRTC technology.",
   },
   {
     icon: MessageCircle,
@@ -49,8 +49,8 @@ const FEATURES = [
   },
   {
     icon: EyeOff,
-    title: "Truly anonymous",
-    body: "No account, no profile, no history. When you leave, there's nothing left behind.",
+    title: "Anonymous chat",
+    body: "No account, profile, or conversation history. When you leave a chat, there is nothing left behind.",
   },
   {
     icon: ShieldCheck,
@@ -87,9 +87,48 @@ const STEPS = [
   },
 ];
 
+const STRUCTURED_DATA = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": "https://www.omegley.in/#website",
+      url: "https://www.omegley.in/",
+      name: "Omegley",
+      description:
+        "Free random video chat with strangers for anonymous video, voice, and text conversations.",
+      inLanguage: "en-US",
+    },
+    {
+      "@type": "Organization",
+      "@id": "https://www.omegley.in/#organization",
+      name: "Omegley",
+      url: "https://www.omegley.in/",
+      logo: "https://www.omegley.in/icon.svg",
+    },
+    {
+      "@type": "WebApplication",
+      "@id": "https://www.omegley.in/#application",
+      name: "Omegley Random Video Chat",
+      url: "https://www.omegley.in/chat",
+      applicationCategory: "SocialNetworkingApplication",
+      operatingSystem: "Any",
+      browserRequirements: "Requires a modern browser with camera and microphone access.",
+      isAccessibleForFree: true,
+      offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+      description:
+        "A free browser-based random video chat with strangers, including anonymous video, voice, and text chat.",
+    },
+  ],
+};
+
 export default function Home() {
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(STRUCTURED_DATA) }}
+      />
       <Nav />
 
       <main>
@@ -119,15 +158,15 @@ export default function Home() {
               </span>
 
               <h1 className="mt-6 font-display text-4xl font-extrabold leading-[1.05] tracking-tight text-white sm:text-5xl lg:text-6xl">
-                Meet someone new
+                Free random video chat
                 <br />
-                in <span className="gradient-text">one click.</span>
+                with <span className="gradient-text">strangers.</span>
               </h1>
 
               <p className="mt-6 max-w-xl text-lg leading-relaxed text-neutral-300">
-                Omegley connects you with a random person somewhere in the
-                world for a face-to-face conversation — instantly, anonymously,
-                and completely free. Just press start.
+                Omegley helps you talk to strangers online through free,
+                anonymous 1-to-1 video, voice, and text chat. Meet someone new
+                anywhere in the world—no signup, no download, and no history.
               </p>
 
               <div className="mt-9 flex flex-col gap-3 sm:flex-row">
@@ -216,7 +255,7 @@ export default function Home() {
               <SectionHeading
                 align="left"
                 eyebrow="Why Omegley"
-                title="The random chat that respects you"
+                title="A better alternative to random chat sites"
                 subtitle="Most “talk to strangers” sites bury you in ads, hoard your data, or route everything through their servers. We built the opposite."
               />
               <ul className="mt-8 space-y-4">
@@ -295,7 +334,7 @@ export default function Home() {
           <div className="container-page">
             <SectionHeading
               eyebrow="How it works"
-              title="Three clicks to a new conversation"
+              title="How random video chat works"
               subtitle="No manual, no learning curve. If you can open a website, you can use Omegley."
             />
             <div className="mt-14 grid gap-6 md:grid-cols-3">

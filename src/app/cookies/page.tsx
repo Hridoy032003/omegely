@@ -4,6 +4,7 @@ import LegalPage, { H2, P, UL } from "@/components/legal/LegalPage";
 export const metadata: Metadata = {
   title: "Cookie Policy",
   description: "The very short story of cookies and storage on Omegley.",
+  alternates: { canonical: "/cookies" },
 };
 
 export default function CookiesPage() {

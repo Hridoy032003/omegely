@@ -2,9 +2,10 @@ import type { Metadata } from "next";
 import VideoChat from "@/components/VideoChat";
 
 export const metadata: Metadata = {
-  title: "Start chatting",
+  title: "Random Video Chat with Strangers",
   description:
-    "Press Start to meet a random person for a free, anonymous 1:1 video & text chat.",
+    "Start a free random video chat with strangers. Anonymous 1-to-1 video, voice, and text chat in your browser with no signup or download.",
+  alternates: { canonical: "/chat" },
 };
 
 export default function ChatPage() {

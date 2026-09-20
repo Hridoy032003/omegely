@@ -18,25 +18,53 @@ const sora = Sora({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://omegley.in"),
+  metadataBase: new URL("https://www.omegley.in"),
   title: {
-    default: "Omegley — Meet someone new in one click",
-    template: "%s · Omegley",
+    default: "Free Random Video Chat with Strangers | Omegley",
+    template: "%s | Omegley",
   },
   description:
-    "Free, anonymous 1:1 video & text chat with strangers around the world. No signup, no downloads, nothing stored — peer-to-peer and private by design.",
+    "Omegley is a free random video chat with strangers. Meet new people online for anonymous 1-to-1 video, voice, and text chat with no signup or download.",
   keywords: [
     "random video chat",
-    "talk to strangers",
+    "video chat with strangers",
+    "talk to strangers online",
+    "free video chat",
     "omegle alternative",
     "anonymous video chat",
-    "free video chat",
+    "random chat",
   ],
+  applicationName: "Omegley",
+  authors: [{ name: "Omegley" }],
+  creator: "Omegley",
+  publisher: "Omegley",
+  category: "social",
+  alternates: { canonical: "/" },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
   openGraph: {
-    title: "Omegley — Meet someone new in one click",
+    title: "Free Random Video Chat with Strangers | Omegley",
     description:
-      "Free, anonymous, peer-to-peer 1:1 video & text chat. No signup. Nothing stored.",
+      "Meet new people online with free, anonymous 1-to-1 video, voice, and text chat. No signup, no download, and no conversation history.",
+    url: "/",
+    siteName: "Omegley",
+    locale: "en_US",
     type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: "Free Random Video Chat with Strangers | Omegley",
+    description:
+      "Free anonymous video chat with strangers. No signup or download—just press Start and meet someone new.",
   },
 };
 

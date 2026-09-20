@@ -4,6 +4,7 @@ import LegalPage, { H2, P, UL } from "@/components/legal/LegalPage";
 export const metadata: Metadata = {
   title: "Privacy Policy",
   description: "How Omegley handles (and doesn't store) your data.",
+  alternates: { canonical: "/privacy" },
 };
 
 export default function PrivacyPage() {

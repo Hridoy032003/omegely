@@ -5,7 +5,11 @@ import { ChevronDown } from "@/components/icons";
 
 const ITEMS = [
   {
-    q: "Is Omegley really free?",
+    q: "What is Omegley random video chat?",
+    a: "Omegley is a free random video chat service for meeting strangers online. You are matched with one person at a time for anonymous video, voice, and text chat in your browser.",
+  },
+  {
+    q: "Is this free video chat with strangers?",
     a: "Yes — completely free, with no account, no trial, and no credit card. You click Start and you're matched.",
   },
   {
@@ -25,7 +29,11 @@ const ITEMS = [
     a: "A modern browser (Chrome, Edge, Firefox or Safari), a working camera and microphone, and an internet connection. That's it.",
   },
   {
-    q: "How do you keep it safe?",
+    q: "Is Omegley an Omegle alternative?",
+    a: "Omegley is a modern browser-based alternative for random video chat with strangers. It is designed for anonymous 1-to-1 conversations with no signup or download.",
+  },
+  {
+    q: "How do you keep random chat safe?",
     a: "You must be 18 or older, connections are encrypted in transit, and our Community Guidelines prohibit harmful behavior. You can skip to a new person instantly at any time.",
   },
 ];

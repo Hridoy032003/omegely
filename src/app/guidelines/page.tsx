@@ -4,6 +4,7 @@ import LegalPage, { H2, P, UL } from "@/components/legal/LegalPage";
 export const metadata: Metadata = {
   title: "Community Guidelines",
   description: "How to keep Omegley safe and welcoming for everyone.",
+  alternates: { canonical: "/guidelines" },
 };
 
 export default function GuidelinesPage() {

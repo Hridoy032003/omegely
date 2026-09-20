@@ -4,6 +4,7 @@ import LegalPage, { H2, P, UL } from "@/components/legal/LegalPage";
 export const metadata: Metadata = {
   title: "Terms of Service",
   description: "The rules for using Omegley.",
+  alternates: { canonical: "/terms" },
 };
 
 export default function TermsPage() {
