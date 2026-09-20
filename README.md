@@ -89,3 +89,16 @@ the frontend as static/SSR, and Ably handles all the live connections.
 | `src/lib/flag.ts` | Country code → emoji flag |
 | `src/components/VideoChat.tsx` | Main UI |
 | `src/components/ChatPanel.tsx` | Text chat over the WebRTC data channel |
+# Omegley monorepo
+
+The repository root remains the public Omegley web app so the existing Vercel
+deployment keeps working. Additional applications live in this same repository:
+
+- `apps/admin` — private moderation and operations dashboard.
+- `apps/pwa` — installable mobile web app.
+- `packages` — browser-safe shared types and utilities.
+
+All applications may use the same Supabase project. Public browser apps use only
+the Supabase URL and anon key. Supabase service-role keys, database passwords,
+and Ably root keys remain server-only environment variables and must never be
+committed.

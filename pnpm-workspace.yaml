@@ -1,3 +1,7 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
 # Build-script decisions. core-js's only postinstall prints a funding notice,
 # so we explicitly skip it (Next.js uses SWC and needs no dependency builds).
 allowBuilds:

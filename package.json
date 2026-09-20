@@ -7,7 +7,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "dev:admin": "pnpm --dir apps/admin dev",
+    "dev:pwa": "pnpm --dir apps/pwa dev"
   },
   "dependencies": {
     "ably": "^2.28.0",
