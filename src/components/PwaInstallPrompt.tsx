@@ -43,7 +43,7 @@ export default function PwaInstallPrompt() {
 
   if (!event) {
     return ios ? (
-      <div className="fixed bottom-4 left-4 right-4 z-[60] mx-auto max-w-md rounded-2xl border border-indigo-400/30 bg-neutral-900/95 p-4 text-sm text-neutral-200 shadow-2xl backdrop-blur-xl">
+      <div className="fixed bottom-4 left-4 right-4 z-[60] mx-auto hidden max-w-md rounded-2xl border border-indigo-400/30 bg-neutral-900/95 p-4 text-sm text-neutral-200 shadow-2xl backdrop-blur-xl sm:block">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="font-medium text-white">Install Omegley</p>
@@ -56,7 +56,7 @@ export default function PwaInstallPrompt() {
   }
 
   return (
-    <div className="fixed bottom-4 left-4 right-4 z-[60] mx-auto flex max-w-md items-center justify-between gap-4 rounded-2xl border border-indigo-400/30 bg-neutral-900/95 p-4 shadow-2xl backdrop-blur-xl">
+    <div className="fixed bottom-4 left-4 right-4 z-[60] mx-auto hidden max-w-md items-center justify-between gap-4 rounded-2xl border border-indigo-400/30 bg-neutral-900/95 p-4 shadow-2xl backdrop-blur-xl sm:flex">
       <div>
         <p className="font-medium text-white">Install Omegley</p>
         <p className="mt-1 text-xs text-neutral-400">Use Omegley like a mobile app.</p>

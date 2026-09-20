@@ -12,8 +12,6 @@ const LINKS = [
   { href: "#faq", label: "FAQ" },
 ];
 
-const APP_URL = "https://app.omegley.in";
-
 export default function Nav() {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -56,12 +54,6 @@ export default function Nav() {
         </div>
 
         <div className="hidden items-center gap-3 md:flex">
-          <a
-            href={APP_URL}
-            className="rounded-full border border-indigo-400/30 bg-indigo-400/10 px-4 py-2 text-sm font-medium text-indigo-200 transition hover:bg-indigo-400/20"
-          >
-            Use our app
-          </a>
           <Link
             href="/chat"
             className="group inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-white px-5 py-2 text-sm font-semibold text-neutral-950 transition hover:bg-neutral-200"
@@ -102,12 +94,6 @@ export default function Nav() {
               <ArrowRight className="h-4 w-4" />
             </Link>
             <Link href="/account" className="rounded-lg px-2 py-3 text-sm text-neutral-300 hover:bg-white/5 hover:text-white">Account</Link>
-            <a
-              href={APP_URL}
-              className="mt-2 inline-flex cursor-pointer items-center justify-center rounded-full border border-indigo-400/30 bg-indigo-400/10 px-5 py-3 text-sm font-medium text-indigo-200"
-            >
-              Use our app
-            </a>
           </div>
         </div>
       )}
