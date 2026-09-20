@@ -1,0 +1,11 @@
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; background: #0b0b10; color: #f4f4f5; font-family: Arial, sans-serif; }
+button, input { font: inherit; }
+.admin-shell { width: min(100% - 32px, 680px); margin: 0 auto; padding: 80px 0; }
+.eyebrow { color: #a5b4fc; font-size: 12px; letter-spacing: .18em; }
+h1 { font-size: clamp(36px, 8vw, 60px); margin: 28px 0 12px; }
+.muted { color: #a1a1aa; line-height: 1.6; }
+form { display: grid; gap: 12px; margin-top: 28px; max-width: 420px; }
+input { border: 1px solid #393946; border-radius: 10px; background: #111119; color: white; padding: 13px; }
+button { width: fit-content; border: 0; border-radius: 999px; background: #5548ed; color: white; cursor: pointer; padding: 13px 20px; }
+.error { color: #fca5a5; }
