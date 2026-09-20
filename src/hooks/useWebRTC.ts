@@ -38,6 +38,26 @@ const REQUEST_TIMEOUT_MS = 4000; // drop an unanswered match-request
 const HEARTBEAT_MS = 3000; // re-announce hello this often
 const REMATCH_COOLDOWN_MS = 3000; // don't instantly re-pair with the peer you just left
 const MATCHMAKING_TIMEOUT_MS = 12000; // never leave Start looking frozen
+const CHANNEL_SETUP_TIMEOUT_MS = 8000;
+
+function withTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(
+      () => reject(new Error(`${label} timed out`)),
+      CHANNEL_SETUP_TIMEOUT_MS,
+    );
+    promise.then(
+      (value) => {
+        clearTimeout(timeout);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timeout);
+        reject(error);
+      },
+    );
+  });
+}
 
 export type Status = "idle" | "searching" | "connected";
 
@@ -282,6 +302,24 @@ export function useWebRTC() {
     [clearPending, sendTo],
   );
 
+  // Presence makes discovery reliable even when two clients miss each other's
+  // first pub/sub hello while they are attaching to the lobby channel.
+  const scanLobby = useCallback(async () => {
+    const lobby = lobbyRef.current;
+    if (!lobby || statusRef.current !== "searching") return;
+
+    try {
+      const members = await withTimeout(lobby.presence.get(), "Lobby discovery");
+      for (const member of members) {
+        const data = member.data as { country?: unknown } | null;
+        const country = typeof data?.country === "string" ? data.country : "XX";
+        maybeRequest(member.clientId, country);
+      }
+    } catch {
+      // The hello heartbeat remains as a fallback if presence is unavailable.
+    }
+  }, [maybeRequest]);
+
   const beginSearch = useCallback(() => {
     partnerRef.current = null;
     setPartnerCountry(null);
@@ -291,7 +329,8 @@ export function useWebRTC() {
     announceHello(); // announce immediately…
     stopHello();
     helloTimerRef.current = setInterval(announceHello, HEARTBEAT_MS); // …then keep announcing
-  }, [announceHello, clearPending, setStatusBoth, stopHello]);
+    void scanLobby();
+  }, [announceHello, clearPending, scanLobby, setStatusBoth, stopHello]);
 
   const onPartnerLeft = useCallback(() => {
     if (partnerRef.current) cooldownRef.current.set(partnerRef.current, Date.now());
@@ -451,27 +490,57 @@ export function useWebRTC() {
       // 4) Private inbox for handshake + signaling.
       const inbox = client.channels.get(`signal:${clientId}`);
       inboxRef.current = inbox;
-      await inbox.subscribe(handleInbox);
+      await withTimeout(inbox.subscribe(handleInbox), "Private inbox setup");
 
       // 5) Enter Ably presence so the live count reflects actual connected users.
       const online = client.channels.get(ONLINE);
       onlineRef.current = online;
-      await online.presence.subscribe(["enter", "leave", "update"], () => {
-        void refreshOnline(online);
-      });
-      await online.presence.enter({ status: "online" });
-      await refreshOnline(online);
+      try {
+        await withTimeout(
+          online.presence.subscribe(["enter", "leave", "update"], () => {
+            void refreshOnline(online);
+          }),
+          "Online presence setup",
+        );
+        await withTimeout(online.presence.enter({ status: "online" }), "Online presence entry");
+        await withTimeout(refreshOnline(online), "Online count refresh");
+      } catch {
+        // Presence is optional. Some deployments only grant subscribe on the
+        // online channel; matchmaking still works through lobby pub/sub.
+        setOnlineCount(0);
+      }
 
       // 6) Lobby (pub/sub): react to other searchers' announcements.
       const lobby = client.channels.get(LOBBY);
       lobbyRef.current = lobby;
-      await lobby.subscribe(HELLO, (msg) => {
-        const { from, country } = msg.data as MatchPayload;
-        maybeRequest(from, country);
-      });
-
-      // 7) Start searching.
+      await withTimeout(
+        lobby.subscribe(HELLO, (msg) => {
+          const { from, country } = msg.data as MatchPayload;
+          maybeRequest(from, country);
+        }),
+        "Lobby setup",
+      );
+      // Mark this client as searching only after all inbox/lobby listeners are
+      // ready, so an incoming request can never be rejected while booting.
       beginSearch();
+      try {
+        await withTimeout(
+          lobby.presence.subscribe(["enter", "update"], (member) => {
+            const data = member.data as { country?: unknown } | null;
+            const country = typeof data?.country === "string" ? data.country : "XX";
+            maybeRequest(member.clientId, country);
+          }),
+          "Lobby presence setup",
+        );
+        await withTimeout(
+          lobby.presence.enter({ status: "searching", country: myCountryRef.current }),
+          "Lobby presence entry",
+        );
+      } catch {
+        // The pub/sub hello heartbeat remains fully functional if the Ably key
+        // has not yet granted presence on the lobby channel.
+      }
+      void scanLobby();
     } catch {
       // Subscribe/presence setup can also fail after the socket connects. Make
       // sure a failed attempt never leaves the camera or Ably client running.
@@ -480,6 +549,9 @@ export function useWebRTC() {
       teardownPeer();
       if (onlineRef.current) {
         void onlineRef.current.presence.leave().catch(() => {});
+      }
+      if (lobbyRef.current) {
+        void lobbyRef.current.presence.leave().catch(() => {});
       }
       localStreamRef.current?.getTracks().forEach((track) => track.stop());
       localStreamRef.current = null;
@@ -495,7 +567,7 @@ export function useWebRTC() {
       startInFlightRef.current = false;
       setStarting(false);
     }
-  }, [beginSearch, clearPending, handleInbox, maybeRequest, refreshOnline, setStatusBoth, stopHello, teardownPeer]);
+  }, [beginSearch, clearPending, handleInbox, maybeRequest, refreshOnline, scanLobby, setStatusBoth, stopHello, teardownPeer]);
 
   const next = useCallback(() => {
     if (partnerRef.current) {
@@ -517,6 +589,8 @@ export function useWebRTC() {
 
     const online = onlineRef.current;
     if (online) void online.presence.leave().catch(() => {});
+    const lobby = lobbyRef.current;
+    if (lobby) void lobby.presence.leave().catch(() => {});
 
     localStreamRef.current?.getTracks().forEach((t) => t.stop());
     localStreamRef.current = null;
@@ -567,6 +641,9 @@ export function useWebRTC() {
       clearPending();
       if (onlineRef.current) {
         void onlineRef.current.presence.leave().catch(() => {});
+      }
+      if (lobbyRef.current) {
+        void lobbyRef.current.presence.leave().catch(() => {});
       }
       teardownPeer();
       localStreamRef.current?.getTracks().forEach((t) => t.stop());

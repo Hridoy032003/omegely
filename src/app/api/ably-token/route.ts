@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
 
   const rest = new Ably.Rest(apiKey);
   const capability = JSON.stringify({
-    lobby: ["publish", "subscribe"],
+    lobby: ["publish", "subscribe", "presence"],
     online: ["subscribe", "presence"],
     "signal:*": ["publish", "subscribe"],
   });
