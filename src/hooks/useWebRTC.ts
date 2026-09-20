@@ -4,7 +4,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 // Runtime from the tree-shakable modular build (bundler-friendly ESM). The
 // default `ably` entry is a UMD bundle webpack can't parse, so we only pull
 // TYPES from it — type-only imports are erased before bundling.
-import { BaseRealtime, FetchRequest, WebSocketTransport } from "ably/modular";
+import {
+  BaseRealtime,
+  FetchRequest,
+  WebSocketTransport,
+  XHRPolling,
+} from "ably/modular";
 import type { InboundMessage, RealtimeChannel } from "ably";
 import {
   MSG,
@@ -32,6 +37,7 @@ const HELLO = "hello"; // "I'm searching" announcement
 const REQUEST_TIMEOUT_MS = 4000; // drop an unanswered match-request
 const HEARTBEAT_MS = 3000; // re-announce hello this often
 const REMATCH_COOLDOWN_MS = 3000; // don't instantly re-pair with the peer you just left
+const MATCHMAKING_TIMEOUT_MS = 12000; // never leave Start looking frozen
 
 export type Status = "idle" | "searching" | "connected";
 
@@ -60,6 +66,7 @@ export function useWebRTC() {
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
+  const [starting, setStarting] = useState(false);
 
   // --- Refs (async callbacks must never read stale React state) -------------
   const statusRef = useRef<Status>("idle");
@@ -353,103 +360,142 @@ export function useWebRTC() {
   const start = useCallback(async () => {
     if (startInFlightRef.current || statusRef.current !== "idle") return;
     startInFlightRef.current = true;
+    setStarting(true);
 
     try {
-    setMediaError(null);
+      setMediaError(null);
 
-    // 1) Local media first — no point matching without a camera/mic.
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: true,
-      });
-      localStreamRef.current = stream;
-      if (localVideoRef.current) localVideoRef.current.srcObject = stream;
-      setMicOn(true);
-      setCamOn(true);
-    } catch {
-      setMediaError(
-        "We need camera & microphone access to connect you. Please allow it and try again.",
-      );
-      return;
-    }
-
-    // 2) Learn our own country (edge header) to advertise to partners.
-    try {
-      const res = await fetch("/api/geo");
-      myCountryRef.current = (await res.json()).country ?? "XX";
-    } catch {
-      myCountryRef.current = "XX";
-    }
-
-    // 3) Connect to Ably with a self-minted clientId + token auth.
-    const clientId = crypto.randomUUID();
-    myIdRef.current = clientId;
-    const client = new BaseRealtime({
-      authUrl: "/api/ably-token",
-      authParams: { clientId },
-      authMethod: "GET",
-      clientId,
-      plugins: { WebSocketTransport, FetchRequest },
-    });
-    clientRef.current = client;
-
-    let connected = false;
-    try {
-      await new Promise<void>((resolve, reject) => {
-        client.connection.once("connected", () => resolve());
-        client.connection.once("failed", (change) =>
-          reject(new Error(change?.reason?.message ?? "connection failed")),
+      // 1) Local media first — no point matching without a camera/mic.
+      try {
+        if (!navigator.mediaDevices?.getUserMedia) {
+          throw new Error("media-unavailable");
+        }
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+          video: true,
+        });
+        localStreamRef.current = stream;
+        if (localVideoRef.current) localVideoRef.current.srcObject = stream;
+        setMicOn(true);
+        setCamOn(true);
+      } catch (error) {
+        const name = error instanceof DOMException ? error.name : "";
+        setMediaError(
+          name === "NotAllowedError"
+            ? "Camera and microphone access is blocked. Allow both permissions in your browser, then press Start again."
+            : name === "NotFoundError"
+              ? "No camera or microphone was found on this device."
+              : "Camera and microphone are unavailable. Open Omegley over HTTPS and try again.",
         );
-      });
-      connected = true;
-    } catch {
-      connected = false;
-    }
+        return;
+      }
 
-    // If Ably never connects (usually a missing/invalid ABLY_API_KEY), bail out
-    // cleanly and tell the user — otherwise the UI just sits at "0 online".
-    if (!connected) {
-      client.close();
-      clientRef.current = null;
-      localStreamRef.current?.getTracks().forEach((t) => t.stop());
+      // 2) Learn our own country (edge header) to advertise to partners.
+      try {
+        const res = await fetch("/api/geo");
+        myCountryRef.current = (await res.json()).country ?? "XX";
+      } catch {
+        myCountryRef.current = "XX";
+      }
+
+      // 3) Connect to Ably with a self-minted clientId + token auth.
+      const clientId = crypto.randomUUID();
+      myIdRef.current = clientId;
+      const client = new BaseRealtime({
+        authUrl: "/api/ably-token",
+        authParams: { clientId },
+        authMethod: "GET",
+        clientId,
+        // Keep long-polling available for mobile networks and browsers where
+        // a firewall or captive portal blocks WebSocket connections.
+        plugins: { WebSocketTransport, XHRPolling, FetchRequest },
+      });
+      clientRef.current = client;
+
+      let connected = false;
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(
+            () => reject(new Error("matchmaking timeout")),
+            MATCHMAKING_TIMEOUT_MS,
+          );
+          client.connection.once("connected", () => {
+            clearTimeout(timeout);
+            resolve();
+          });
+          client.connection.once("failed", (change) => {
+            clearTimeout(timeout);
+            reject(new Error(change?.reason?.message ?? "connection failed"));
+          });
+        });
+        connected = true;
+      } catch {
+        connected = false;
+      }
+
+      // If Ably never connects, bail out cleanly and tell the user instead of
+      // leaving the Start button looking unresponsive.
+      if (!connected) {
+        client.close();
+        clientRef.current = null;
+        localStreamRef.current?.getTracks().forEach((t) => t.stop());
+        localStreamRef.current = null;
+        if (localVideoRef.current) localVideoRef.current.srcObject = null;
+        setMediaError(
+          "Couldn’t connect to the matchmaking service. Check your internet connection and try again.",
+        );
+        setStatusBoth("idle");
+        return;
+      }
+
+      // 4) Private inbox for handshake + signaling.
+      const inbox = client.channels.get(`signal:${clientId}`);
+      inboxRef.current = inbox;
+      await inbox.subscribe(handleInbox);
+
+      // 5) Enter Ably presence so the live count reflects actual connected users.
+      const online = client.channels.get(ONLINE);
+      onlineRef.current = online;
+      await online.presence.subscribe(["enter", "leave", "update"], () => {
+        void refreshOnline(online);
+      });
+      await online.presence.enter({ status: "online" });
+      await refreshOnline(online);
+
+      // 6) Lobby (pub/sub): react to other searchers' announcements.
+      const lobby = client.channels.get(LOBBY);
+      lobbyRef.current = lobby;
+      await lobby.subscribe(HELLO, (msg) => {
+        const { from, country } = msg.data as MatchPayload;
+        maybeRequest(from, country);
+      });
+
+      // 7) Start searching.
+      beginSearch();
+    } catch {
+      // Subscribe/presence setup can also fail after the socket connects. Make
+      // sure a failed attempt never leaves the camera or Ably client running.
+      stopHello();
+      clearPending();
+      teardownPeer();
+      if (onlineRef.current) {
+        void onlineRef.current.presence.leave().catch(() => {});
+      }
+      localStreamRef.current?.getTracks().forEach((track) => track.stop());
       localStreamRef.current = null;
       if (localVideoRef.current) localVideoRef.current.srcObject = null;
-      setMediaError(
-        "Couldn't reach the matchmaking service. Set a real ABLY_API_KEY in .env.local (free key at ably.com) and restart the dev server.",
-      );
+      clientRef.current?.close();
+      clientRef.current = null;
+      lobbyRef.current = null;
+      onlineRef.current = null;
+      inboxRef.current = null;
       setStatusBoth("idle");
-      return;
-    }
-
-    // 4) Private inbox for handshake + signaling.
-    const inbox = client.channels.get(`signal:${clientId}`);
-    inboxRef.current = inbox;
-    await inbox.subscribe(handleInbox);
-
-    // 5) Enter Ably presence so the live count reflects actual connected users.
-    const online = client.channels.get(ONLINE);
-    onlineRef.current = online;
-    await online.presence.subscribe(["enter", "leave", "update"], () => {
-      void refreshOnline(online);
-    });
-    await online.presence.enter({ status: "online" });
-    await refreshOnline(online);
-
-    // 6) Lobby (pub/sub): react to other searchers' announcements.
-    const lobby = client.channels.get(LOBBY);
-    lobbyRef.current = lobby;
-    await lobby.subscribe(HELLO, (msg) => {
-      const { from, country } = msg.data as MatchPayload;
-      maybeRequest(from, country);
-    });
-
-    // 7) Start searching.
-    beginSearch();
+      setMediaError("Omegley could not start the chat. Please refresh and try again.");
     } finally {
       startInFlightRef.current = false;
+      setStarting(false);
     }
-  }, [beginSearch, handleInbox, maybeRequest, refreshOnline]);
+  }, [beginSearch, clearPending, handleInbox, maybeRequest, refreshOnline, setStatusBoth, stopHello, teardownPeer]);
 
   const next = useCallback(() => {
     if (partnerRef.current) {
@@ -534,6 +580,7 @@ export function useWebRTC() {
     partnerCountry,
     onlineCount,
     mediaError,
+    starting,
     micOn,
     camOn,
     localVideoRef,

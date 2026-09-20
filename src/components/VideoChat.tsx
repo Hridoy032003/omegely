@@ -28,6 +28,7 @@ export default function VideoChat() {
     partnerCountry,
     onlineCount,
     mediaError,
+    starting,
     micOn,
     camOn,
     localVideoRef,
@@ -420,10 +421,12 @@ export default function VideoChat() {
             {isIdle ? (
               <button
                 onClick={start}
-                className="inline-flex cursor-pointer items-center gap-2 rounded-full bg-white px-10 py-3.5 text-sm font-semibold text-neutral-950 shadow-lg shadow-indigo-500/10 transition hover:bg-neutral-200"
+                disabled={starting}
+                aria-busy={starting}
+                className="inline-flex cursor-pointer items-center gap-2 rounded-full bg-white px-10 py-3.5 text-sm font-semibold text-neutral-950 shadow-lg shadow-indigo-500/10 transition hover:bg-neutral-200 disabled:cursor-wait disabled:opacity-70"
               >
                 <Video className="h-4 w-4" />
-                Start
+                {starting ? "Starting…" : "Start"}
               </button>
             ) : (
               <div className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 p-1.5 backdrop-blur">
