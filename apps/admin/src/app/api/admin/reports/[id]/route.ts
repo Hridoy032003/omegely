@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/admin-server";
+import { requireAdmin } from "../../../../../lib/admin-server";
 
 const STATUSES = new Set(["open", "reviewing", "resolved", "dismissed"]);
 

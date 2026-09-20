@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/admin-server";
+import { requireAdmin } from "../../../../lib/admin-server";
 
 export async function GET(request: NextRequest) {
   const context = await requireAdmin(request);

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/admin-server";
+import { requireAdmin } from "../../../../../lib/admin-server";
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   const context = await requireAdmin(request);
