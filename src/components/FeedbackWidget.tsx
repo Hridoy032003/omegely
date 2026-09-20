@@ -13,7 +13,7 @@ const TOPICS: Array<{ value: FeedbackTopic; label: string; kind: FeedbackKind }>
   { value: "report", label: "Report a user or safety issue", kind: "safety" },
   { value: "suggestion", label: "Suggest an improvement", kind: "feedback" },
   { value: "other", label: "Other", kind: "feedback" },
-};
+];
 
 export default function FeedbackWidget() {
   const [open, setOpen] = useState(false);
