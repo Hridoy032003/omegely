@@ -5,12 +5,13 @@ import type { Session } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase-browser";
 
 type DashboardData = {
-  counts: { users: number; banned: number; reports: number; openReports: number };
+  counts: { users: number; banned: number; reports: number; openReports: number; feedback: number; openFeedback: number };
   users: Array<{ id: string; email: string | null; display_name: string | null; role: string; is_banned: boolean; created_at: string; last_seen: string | null }>;
   reports: Array<{ id: string; reporter_id: string | null; target_user_id: string | null; reason: string; details: string | null; status: string; created_at: string; reviewed_at: string | null }>;
+  feedback: Array<{ id: string; user_id: string | null; email: string | null; kind: string; message: string; page_url: string | null; status: string; admin_note: string | null; created_at: string; updated_at: string }>;
 };
 
-const EMPTY: DashboardData = { counts: { users: 0, banned: 0, reports: 0, openReports: 0 }, users: [], reports: [] };
+const EMPTY: DashboardData = { counts: { users: 0, banned: 0, reports: 0, openReports: 0, feedback: 0, openFeedback: 0 }, users: [], reports: [], feedback: [] };
 
 export default function AdminPage() {
   const [email, setEmail] = useState("");
@@ -83,7 +84,7 @@ export default function AdminPage() {
   return (
     <main className="admin-shell admin-wide">
       <header className="admin-header"><div><p className="eyebrow">OMEGLEY OPERATIONS</p><h1>Dashboard</h1></div><div className="header-actions"><button type="button" className="secondary" disabled={busy} onClick={() => void loadDashboard(session.access_token)}>Refresh</button><button type="button" className="secondary" onClick={() => void supabase.auth.signOut().then(() => setSession(null))}>Sign out</button></div></header>
-      <section className="stats-grid"><Stat label="Total users" value={data.counts.users} /><Stat label="Open reports" value={data.counts.openReports} danger={data.counts.openReports > 0} /><Stat label="All reports" value={data.counts.reports} /><Stat label="Banned users" value={data.counts.banned} /></section>
+      <section className="stats-grid"><Stat label="Total users" value={data.counts.users} /><Stat label="Open reports" value={data.counts.openReports} danger={data.counts.openReports > 0} /><Stat label="All reports" value={data.counts.reports} /><Stat label="Banned users" value={data.counts.banned} /><Stat label="Open feedback" value={data.counts.openFeedback} danger={data.counts.openFeedback > 0} /><Stat label="All feedback" value={data.counts.feedback} /></section>
       <section className="panel"><div className="panel-heading"><div><h2>Users</h2><p>Review profiles and control account access.</p></div></div><div className="table-wrap"><table><thead><tr><th>User</th><th>Role</th><th>Status</th><th>Joined</th><th>Action</th></tr></thead><tbody>
         {data.users.map((user) => <tr key={user.id}><td><strong>{user.display_name || "Unnamed user"}</strong><small>{user.email || "No email"}</small></td><td>{user.role}</td><td><span className={user.is_banned ? "badge red" : "badge green"}>{user.is_banned ? "Banned" : "Active"}</span></td><td>{formatDate(user.created_at)}</td><td><button className={user.is_banned ? "tiny" : "tiny danger"} disabled={busy} onClick={() => void update(`/api/admin/users/${user.id}`, { is_banned: !user.is_banned })}>{user.is_banned ? "Unban" : "Ban"}</button></td></tr>)}
         {!data.users.length && <tr><td colSpan={5} className="empty">No users yet.</td></tr>}
@@ -91,6 +92,10 @@ export default function AdminPage() {
       <section className="panel"><div className="panel-heading"><div><h2>Reports</h2><p>Review safety reports and record the decision.</p></div></div><div className="table-wrap"><table><thead><tr><th>Reason</th><th>Target</th><th>Status</th><th>Created</th><th>Action</th></tr></thead><tbody>
         {data.reports.map((report) => <tr key={report.id}><td><strong>{report.reason}</strong><small>{report.details || "No additional details"}</small></td><td>{report.target_user_id ? report.target_user_id.slice(0, 8) : "Guest session"}</td><td><span className="badge">{report.status}</span></td><td>{formatDate(report.created_at)}</td><td><select value={report.status} disabled={busy} onChange={(event) => void update(`/api/admin/reports/${report.id}`, { status: event.target.value })}><option value="open">Open</option><option value="reviewing">Reviewing</option><option value="resolved">Resolved</option><option value="dismissed">Dismissed</option></select></td></tr>)}
         {!data.reports.length && <tr><td colSpan={5} className="empty">No reports yet.</td></tr>}
+      </tbody></table></div></section>
+      <section className="panel"><div className="panel-heading"><div><h2>Feedback & support</h2><p>Read user feedback, bug reports, and safety concerns.</p></div></div><div className="table-wrap"><table><thead><tr><th>Type</th><th>Message</th><th>Contact</th><th>Created</th><th>Action</th></tr></thead><tbody>
+        {data.feedback.map((item) => <tr key={item.id}><td><span className={`badge ${item.kind === "safety" ? "red" : ""}`}>{item.kind}</span><small>{item.status}</small></td><td><strong>{item.message}</strong>{item.page_url && <small>{item.page_url}</small>}</td><td>{item.email || "Anonymous"}</td><td>{formatDate(item.created_at)}</td><td><select value={item.status} disabled={busy} onChange={(event) => void update(`/api/admin/feedback/${item.id}`, { status: event.target.value })}><option value="open">Open</option><option value="reviewing">Reviewing</option><option value="resolved">Resolved</option><option value="dismissed">Dismissed</option></select></td></tr>)}
+        {!data.feedback.length && <tr><td colSpan={5} className="empty">No feedback yet.</td></tr>}
       </tbody></table></div></section>
       {message && <p className="error">{message}</p>}
     </main>
