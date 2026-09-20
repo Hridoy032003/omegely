@@ -25,18 +25,48 @@ export default function AccountPanel() {
   useEffect(() => {
     void supabase.auth.getUser().then(({ data }) => {
       setUser(data.user ?? null);
-      if (data.user) void loadProfile(data.user.id);
+      if (data.user) void loadProfile(data.user);
     });
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
-      if (session?.user) void loadProfile(session.user.id);
+      if (session?.user) void loadProfile(session.user);
     });
     return () => data.subscription.unsubscribe();
   }, []);
 
-  const loadProfile = async (id: string) => {
-    const { data } = await supabase.from("profiles").select("display_name, avatar_url, bio, interests").eq("id", id).maybeSingle();
-    if (data) setProfile({ ...EMPTY_PROFILE, ...data });
+  const loadProfile = async (currentUser: User) => {
+    const metadata = currentUser.user_metadata ?? {};
+    const googleName = typeof metadata.full_name === "string"
+      ? metadata.full_name
+      : typeof metadata.name === "string"
+        ? metadata.name
+        : "";
+    const googleAvatar = typeof metadata.avatar_url === "string"
+      ? metadata.avatar_url
+      : typeof metadata.picture === "string"
+        ? metadata.picture
+        : "";
+    const { data } = await supabase
+      .from("profiles")
+      .select("display_name, avatar_url, bio, interests")
+      .eq("id", currentUser.id)
+      .maybeSingle();
+    const nextProfile = {
+      ...EMPTY_PROFILE,
+      ...(data ?? {}),
+      display_name: data?.display_name || googleName,
+      avatar_url: googleAvatar || data?.avatar_url || "",
+    };
+    setProfile(nextProfile);
+
+    // Persist Google profile details once so the admin dashboard can use them.
+    if (data && (googleName || googleAvatar) && (!data.display_name || !data.avatar_url)) {
+      void supabase.from("profiles").update({
+        display_name: data.display_name || googleName || null,
+        avatar_url: data.avatar_url || googleAvatar || null,
+        updated_at: new Date().toISOString(),
+      }).eq("id", currentUser.id);
+    }
   };
 
   const authenticate = async (event: FormEvent) => {
@@ -82,8 +112,10 @@ export default function AccountPanel() {
         {user ? (
           <form onSubmit={saveProfile} className="mt-10 space-y-4 rounded-2xl border border-white/10 bg-white/[0.03] p-6">
             <p className="text-sm text-neutral-400">Signed in as <span className="text-white">{user.email}</span></p>
+            {profile.avatar_url && (
+              <img src={profile.avatar_url} alt="Your Google profile" className="h-16 w-16 rounded-full border border-white/15 object-cover" referrerPolicy="no-referrer" />
+            )}
             <input className="account-input" placeholder="Display name" value={profile.display_name ?? ""} onChange={(e) => setProfile({ ...profile, display_name: e.target.value })} />
-            <input className="account-input" placeholder="Avatar image URL (optional)" value={profile.avatar_url ?? ""} onChange={(e) => setProfile({ ...profile, avatar_url: e.target.value })} />
             <textarea className="account-input min-h-28" placeholder="Short bio" value={profile.bio ?? ""} onChange={(e) => setProfile({ ...profile, bio: e.target.value })} />
             <input className="account-input" placeholder="Interests, separated by commas" value={(profile.interests ?? []).join(", ")} onChange={(e) => setProfile({ ...profile, interests: e.target.value.split(",").map((item) => item.trim()).filter(Boolean) })} />
             <div className="flex flex-wrap gap-3">
