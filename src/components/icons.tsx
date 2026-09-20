@@ -111,6 +111,23 @@ export const MessageCircle = (p: IconProps) => (
   </Svg>
 );
 
+export const Bell = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
+    <path d="M10 21h4" />
+  </Svg>
+);
+
+export const Share = (p: IconProps) => (
+  <Svg {...p}>
+    <circle cx="18" cy="5" r="3" />
+    <circle cx="6" cy="12" r="3" />
+    <circle cx="18" cy="19" r="3" />
+    <path d="m8.6 13.5 6.8 4" />
+    <path d="m15.4 6.5-6.8 4" />
+  </Svg>
+);
+
 export const Users = (p: IconProps) => (
   <Svg {...p}>
     <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />

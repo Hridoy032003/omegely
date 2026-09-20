@@ -6,11 +6,14 @@ import { useWebRTC } from "@/hooks/useWebRTC";
 import { countryFlag } from "@/lib/flag";
 import { LogoMark } from "@/components/logo";
 import SearchingIndicator from "@/components/SearchingIndicator";
+import DemoPreview from "@/components/DemoPreview";
 import ChatPanel from "./ChatPanel";
 import {
+  Bell,
   MessageCircle,
   Mic,
   MicOff,
+  Share,
   SkipForward,
   Square,
   Video,
@@ -53,6 +56,59 @@ export default function VideoChat() {
   const [unread, setUnread] = useState(0);
   const seenCount = useRef(0);
   const swipeStart = useRef<{ x: number; y: number } | null>(null);
+  const swipeAnimationTimer = useRef<number | null>(null);
+  const previousStatus = useRef(status);
+  const [searchSeconds, setSearchSeconds] = useState(0);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [shareStatus, setShareStatus] = useState<"idle" | "shared" | "copied" | "error">("idle");
+  const [swipeOffset, setSwipeOffset] = useState(0);
+  const [swipeAnimating, setSwipeAnimating] = useState(false);
+
+  useEffect(() => {
+    return () => {
+      if (swipeAnimationTimer.current) {
+        window.clearTimeout(swipeAnimationTimer.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isSearching) {
+      setSearchSeconds(0);
+      return;
+    }
+
+    const startedAt = Date.now();
+    const timer = window.setInterval(() => {
+      setSearchSeconds(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [isSearching]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && "Notification" in window) {
+      setNotificationsEnabled(Notification.permission === "granted");
+    }
+  }, []);
+
+  useEffect(() => {
+    const wasSearching = previousStatus.current === "searching";
+    const foundRealPerson = wasSearching && status === "connected";
+    if (
+      foundRealPerson &&
+      notificationsEnabled &&
+      document.hidden &&
+      "Notification" in window &&
+      Notification.permission === "granted"
+    ) {
+      new Notification("You found someone new on Omegley", {
+        body: "Your private video chat is ready.",
+        icon: "/icon.svg",
+      });
+    }
+    previousStatus.current = status;
+  }, [notificationsEnabled, status]);
 
   useEffect(() => {
     if (messages.length === 0) {
@@ -73,24 +129,93 @@ export default function VideoChat() {
   }, [messages, chatOpen]);
 
   // On mobile, swiping up on the video behaves like a short-form video feed:
-  // leave the current stranger and immediately search for the next one.
+  // the card follows the finger, snaps back when the gesture is too short, or
+  // animates off-screen before leaving the current stranger.
   const handleVideoTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
     if (event.touches.length !== 1) return;
+    if (swipeAnimationTimer.current) {
+      window.clearTimeout(swipeAnimationTimer.current);
+      swipeAnimationTimer.current = null;
+    }
+    setSwipeAnimating(false);
+    setSwipeOffset(0);
     const touch = event.touches[0];
     swipeStart.current = { x: touch.clientX, y: touch.clientY };
+  };
+
+  const handleVideoTouchMove = (event: React.TouchEvent<HTMLDivElement>) => {
+    const start = swipeStart.current;
+    if (!start || event.touches.length !== 1 || status === "idle") return;
+
+    const touch = event.touches[0];
+    const deltaX = touch.clientX - start.x;
+    const deltaY = touch.clientY - start.y;
+    if (Math.abs(deltaY) <= Math.abs(deltaX)) return;
+
+    // Only let the card move upward. Downward movement is kept subtle so a
+    // normal browser pull gesture never drags the chat screen away.
+    const maxOffset = window.innerHeight * 0.95;
+    setSwipeOffset(Math.max(-maxOffset, Math.min(24, deltaY)));
   };
 
   const handleVideoTouchEnd = (event: React.TouchEvent<HTMLDivElement>) => {
     const start = swipeStart.current;
     swipeStart.current = null;
-    if (!start || status === "idle") return;
+    if (!start) return;
 
     const touch = event.changedTouches[0];
     const deltaX = touch.clientX - start.x;
     const deltaY = touch.clientY - start.y;
     const isVerticalSwipe = Math.abs(deltaY) > 64 && Math.abs(deltaY) > Math.abs(deltaX) * 1.2;
 
-    if (isVerticalSwipe && deltaY < 0) next();
+    setSwipeAnimating(true);
+    if (isVerticalSwipe && deltaY < 0 && status !== "idle") {
+      setSwipeOffset(-window.innerHeight);
+      swipeAnimationTimer.current = window.setTimeout(() => {
+        next();
+        setSwipeOffset(0);
+        setSwipeAnimating(false);
+        swipeAnimationTimer.current = null;
+      }, 240);
+      return;
+    }
+
+    setSwipeOffset(0);
+    swipeAnimationTimer.current = window.setTimeout(() => {
+      setSwipeAnimating(false);
+      swipeAnimationTimer.current = null;
+    }, 240);
+  };
+
+  const enableNotifications = async () => {
+    if (!("Notification" in window)) {
+      setShareStatus("error");
+      return;
+    }
+    const permission = await Notification.requestPermission();
+    setNotificationsEnabled(permission === "granted");
+  };
+
+  const shareInvite = async () => {
+    const inviteUrl = `${window.location.origin}/chat?ref=invite`;
+    const shareData = {
+      title: "Join me on Omegley",
+      text: "Try Omegley with me — free random video chat with strangers.",
+      url: inviteUrl,
+    };
+
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+        setShareStatus("shared");
+      } else {
+        await navigator.clipboard.writeText(inviteUrl);
+        setShareStatus("copied");
+      }
+    } catch {
+      setShareStatus("error");
+    }
+    window.setTimeout(() => setShareStatus("idle"), 2500);
   };
 
   const knownCountry = partnerCountry && partnerCountry !== "XX";
@@ -143,11 +268,20 @@ export default function VideoChat() {
         <section className="flex min-h-0 flex-col gap-3 sm:gap-4">
           <div
             onTouchStart={handleVideoTouchStart}
+            onTouchMove={handleVideoTouchMove}
             onTouchEnd={handleVideoTouchEnd}
             onTouchCancel={() => {
               swipeStart.current = null;
+              setSwipeAnimating(true);
+              setSwipeOffset(0);
             }}
-            className={`relative min-h-0 flex-1 touch-none overflow-hidden rounded-3xl border bg-black transition-colors ${
+            style={{
+              transform: `translate3d(0, ${swipeOffset}px, 0)`,
+              transition: swipeAnimating
+                ? "transform 240ms cubic-bezier(0.22, 1, 0.36, 1)"
+                : "none",
+            }}
+            className={`relative min-h-0 flex-1 touch-none will-change-transform overflow-hidden rounded-3xl border bg-black transition-colors ${
               isConnected ? "border-indigo-500/40" : "border-white/10"
             }`}
           >
@@ -175,7 +309,7 @@ export default function VideoChat() {
 
             {/* Idle / searching overlay */}
             {!isConnected && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-neutral-950/85 px-6 text-center">
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 overflow-hidden bg-neutral-950/85 px-3 text-center sm:gap-3 sm:px-6">
                 {isIdle && (
                   <>
                     <LogoMark className="mb-1 h-12 w-12" />
@@ -192,7 +326,52 @@ export default function VideoChat() {
                     )}
                   </>
                 )}
-                {isSearching && <SearchingIndicator />}
+                {isSearching && (
+                  <div className="flex w-full flex-col items-center gap-2 sm:gap-4">
+                    {searchSeconds >= 5 ? <DemoPreview /> : <SearchingIndicator />}
+
+                    <div className="max-w-md">
+                      <p className="text-sm font-medium text-neutral-200">
+                        {onlineCount > 1
+                          ? `${onlineCount} people are online — finding your next match…`
+                          : "You’re early — help bring the first people online."}
+                      </p>
+                      <p className="mt-1 text-[11px] leading-relaxed text-neutral-500 sm:text-xs">
+                        Real users are always prioritized. Invite a friend or
+                        turn on a notification while you wait.
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap justify-center gap-2">
+                      <button
+                        type="button"
+                        onClick={shareInvite}
+                        className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3.5 py-2 text-xs font-medium text-neutral-200 transition hover:bg-white/10"
+                      >
+                        <Share className="h-3.5 w-3.5" />
+                        Invite a friend
+                      </button>
+                      <button
+                        type="button"
+                        onClick={enableNotifications}
+                        disabled={notificationsEnabled}
+                        className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3.5 py-2 text-xs font-medium text-neutral-200 transition hover:bg-white/10 disabled:cursor-default disabled:opacity-60"
+                      >
+                        <Bell className="h-3.5 w-3.5" />
+                        {notificationsEnabled ? "Notifications on" : "Notify me"}
+                      </button>
+                    </div>
+
+                    {shareStatus !== "idle" && (
+                      <p className="text-xs text-neutral-400" role="status">
+                        {shareStatus === "shared" && "Invite sheet opened."}
+                        {shareStatus === "copied" && "Invite link copied."}
+                        {shareStatus === "error" &&
+                          "Sharing or notifications are unavailable here."}
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
@@ -216,15 +395,20 @@ export default function VideoChat() {
               </div>
             )}
 
-            {/* Local (self) preview */}
+            {/* Local preview is useful before the demo appears, then stays out
+                of the way so it cannot cover the waiting actions on small screens. */}
             <video
               ref={localVideoRef}
               autoPlay
               playsInline
               muted
-              className="absolute bottom-3 right-3 h-24 w-32 rounded-xl border border-white/15 bg-neutral-900 object-cover shadow-lg ring-1 ring-black/30 sm:h-28 sm:w-40"
+              className={`absolute right-3 rounded-xl border border-white/15 bg-neutral-900 object-cover shadow-lg ring-1 ring-black/30 ${
+                isSearching
+                  ? "top-3 h-16 w-24 sm:h-20 sm:w-28"
+                  : "bottom-3 h-24 w-32 sm:h-28 sm:w-40"
+              } ${isSearching && searchSeconds >= 5 ? "invisible" : ""}`}
             />
-            {!isIdle && (
+            {!isIdle && !isSearching && (
               <span className="absolute bottom-4 left-3 rounded-md bg-black/50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-neutral-300 backdrop-blur">
                 You
               </span>
