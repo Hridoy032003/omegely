@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ArrowRight, Menu, X } from "@/components/icons";
 import { LogoMark } from "@/components/logo";
+import UserAccountBadge from "@/components/UserAccountBadge";
 
 const LINKS = [
   { href: "#features", label: "Features" },
@@ -53,24 +54,24 @@ export default function Nav() {
           ))}
         </div>
 
-        <div className="hidden items-center gap-3 md:flex">
+        <div className="flex items-center gap-2">
+          <UserAccountBadge compact />
           <Link
             href="/chat"
-            className="group inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-white px-5 py-2 text-sm font-semibold text-neutral-950 transition hover:bg-neutral-200"
+            className="group hidden cursor-pointer items-center gap-1.5 rounded-full bg-white px-5 py-2 text-sm font-semibold text-neutral-950 transition hover:bg-neutral-200 md:inline-flex"
           >
             Start free
             <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
           </Link>
+          <button
+            onClick={() => setOpen((v) => !v)}
+            className="inline-flex cursor-pointer items-center justify-center rounded-lg p-2 text-neutral-200 hover:bg-white/10 md:hidden"
+            aria-label={open ? "Close menu" : "Open menu"}
+            aria-expanded={open}
+          >
+            {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
         </div>
-
-        <button
-          onClick={() => setOpen((v) => !v)}
-          className="inline-flex cursor-pointer items-center justify-center rounded-lg p-2 text-neutral-200 hover:bg-white/10 md:hidden"
-          aria-label={open ? "Close menu" : "Open menu"}
-          aria-expanded={open}
-        >
-          {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-        </button>
       </nav>
 
       {open && (

@@ -4,16 +4,20 @@ import { FormEvent, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase-browser";
 
 type FeedbackKind = "feedback" | "bug" | "safety";
+type FeedbackTopic = "video" | "audio" | "matching" | "report" | "suggestion" | "other";
 
-const KIND_LABELS: Record<FeedbackKind, string> = {
-  feedback: "General feedback",
-  bug: "Report a bug",
-  safety: "Safety concern",
+const TOPICS: Array<{ value: FeedbackTopic; label: string; kind: FeedbackKind }> = [
+  { value: "video", label: "Video is not working", kind: "bug" },
+  { value: "audio", label: "Microphone or audio issue", kind: "bug" },
+  { value: "matching", label: "I cannot find a match", kind: "bug" },
+  { value: "report", label: "Report a user or safety issue", kind: "safety" },
+  { value: "suggestion", label: "Suggest an improvement", kind: "feedback" },
+  { value: "other", label: "Other", kind: "feedback" },
 };
 
 export default function FeedbackWidget() {
   const [open, setOpen] = useState(false);
-  const [kind, setKind] = useState<FeedbackKind>("feedback");
+  const [topic, setTopic] = useState<FeedbackTopic>("video");
   const [message, setMessage] = useState("");
   const [email, setEmail] = useState("");
   const [userId, setUserId] = useState<string | null>(null);
@@ -37,11 +41,13 @@ export default function FeedbackWidget() {
 
     setBusy(true);
     setNotice("");
+    const selectedTopic = TOPICS.find((item) => item.value === topic) ?? TOPICS[0];
+    const submittedMessage = `[${selectedTopic.label}] ${trimmed}`.slice(0, 4000);
     const { error } = await supabase.from("feedback").insert({
       user_id: userId,
       email: email.trim() || null,
-      kind,
-      message: trimmed,
+      kind: selectedTopic.kind,
+      message: submittedMessage,
       page_url: window.location.href,
     });
 
@@ -96,15 +102,15 @@ export default function FeedbackWidget() {
 
             <form onSubmit={submit} className="mt-5 space-y-3">
               <label className="block text-sm text-neutral-300">
-                Type
+                What do you need help with?
                 <select
-                  value={kind}
-                  onChange={(event) => setKind(event.target.value as FeedbackKind)}
+                  value={topic}
+                  onChange={(event) => setTopic(event.target.value as FeedbackTopic)}
                   style={{ colorScheme: "dark" }}
                   className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-sm text-white outline-none focus:border-indigo-400"
                 >
-                  {Object.entries(KIND_LABELS).map(([value, label]) => (
-                    <option key={value} value={value} style={{ backgroundColor: "#111119", color: "#ffffff" }}>{label}</option>
+                  {TOPICS.map((item) => (
+                    <option key={item.value} value={item.value} style={{ backgroundColor: "#111119", color: "#ffffff" }}>{item.label}</option>
                   ))}
                 </select>
               </label>

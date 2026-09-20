@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useWebRTC } from "@/hooks/useWebRTC";
 import { countryFlag } from "@/lib/flag";
 import { LogoMark } from "@/components/logo";
+import UserAccountBadge from "@/components/UserAccountBadge";
 import SearchingIndicator from "@/components/SearchingIndicator";
 import DemoPreview from "@/components/DemoPreview";
 import ChatPanel from "./ChatPanel";
@@ -239,6 +240,7 @@ export default function VideoChat() {
         </Link>
 
         <div className="flex items-center gap-2">
+          <UserAccountBadge compact />
           <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-neutral-300">
             <span className="relative flex h-2 w-2">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-75" />
