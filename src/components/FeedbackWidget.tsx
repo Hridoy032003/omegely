@@ -100,10 +100,11 @@ export default function FeedbackWidget() {
                 <select
                   value={kind}
                   onChange={(event) => setKind(event.target.value as FeedbackKind)}
+                  style={{ colorScheme: "dark" }}
                   className="mt-1.5 w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-sm text-white outline-none focus:border-indigo-400"
                 >
                   {Object.entries(KIND_LABELS).map(([value, label]) => (
-                    <option key={value} value={value}>{label}</option>
+                    <option key={value} value={value} style={{ backgroundColor: "#111119", color: "#ffffff" }}>{label}</option>
                   ))}
                 </select>
               </label>
