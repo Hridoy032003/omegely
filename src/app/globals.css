@@ -49,6 +49,10 @@ h3,
   }
 }
 
+.account-input {
+  @apply w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none placeholder:text-neutral-600 focus:border-indigo-400/60;
+}
+
 /* Respect users who prefer less motion (accessibility checklist) */
 @media (prefers-reduced-motion: reduce) {
   html {

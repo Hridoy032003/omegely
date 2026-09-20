@@ -43,6 +43,7 @@ export default function Nav() {
         </Link>
 
         <div className="hidden items-center gap-8 md:flex">
+          <Link href="/account" className="text-sm text-neutral-300 transition-colors hover:text-white">Account</Link>
           {LINKS.map((l) => (
             <a
               key={l.href}
@@ -100,6 +101,7 @@ export default function Nav() {
               Start free
               <ArrowRight className="h-4 w-4" />
             </Link>
+            <Link href="/account" className="rounded-lg px-2 py-3 text-sm text-neutral-300 hover:bg-white/5 hover:text-white">Account</Link>
             <a
               href={APP_URL}
               className="mt-2 inline-flex cursor-pointer items-center justify-center rounded-full border border-indigo-400/30 bg-indigo-400/10 px-5 py-3 text-sm font-medium text-indigo-200"
