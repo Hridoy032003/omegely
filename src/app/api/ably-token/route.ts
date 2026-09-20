@@ -20,7 +20,12 @@ export async function GET(req: NextRequest) {
   const clientId = req.nextUrl.searchParams.get("clientId") ?? undefined;
 
   const rest = new Ably.Rest(apiKey);
-  const tokenRequest = await rest.auth.createTokenRequest({ clientId });
+  const capability = JSON.stringify({
+    lobby: ["publish", "subscribe"],
+    online: ["subscribe", "presence"],
+    "signal:*": ["publish", "subscribe"],
+  });
+  const tokenRequest = await rest.auth.createTokenRequest({ clientId, capability });
 
   return NextResponse.json(tokenRequest);
 }

@@ -3,8 +3,8 @@
  * no stateful backend, so these types ARE the contract between peers.
  *
  * Channels:
- *   - `online`            presence-only; used for a live user count.
- *   - `lobby`             presence-only; who is currently waiting for a match.
+ *   - `online`            Ably presence; used for a live user count.
+ *   - `lobby`             pub/sub; searching users announce themselves here.
  *   - `signal:<clientId>` each client's private inbox. Peers publish match
  *                         handshake + WebRTC signaling addressed to that id.
  *
@@ -50,7 +50,7 @@ export interface ByePayload {
   from: string;
 }
 
-/** Data attached to a member's presence in the `lobby` / `online` channels. */
+/** Data attached to a member's presence in the `online` channel. */
 export interface PresenceData {
-  country: string;
+  status: "online";
 }

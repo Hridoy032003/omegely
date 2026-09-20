@@ -26,13 +26,11 @@ const ICE_SERVERS: RTCIceServer[] = [
 ];
 
 const LOBBY = "lobby"; // pub/sub channel where searching users announce themselves
-const ONLINE = "online"; // pub/sub channel used as a lightweight heartbeat for the count
+const ONLINE = "online"; // Ably presence channel used for the live count
 const HELLO = "hello"; // "I'm searching" announcement
-const PING = "ping"; // online heartbeat
 
 const REQUEST_TIMEOUT_MS = 4000; // drop an unanswered match-request
-const HEARTBEAT_MS = 3000; // re-announce hello / send online ping this often
-const ONLINE_TTL_MS = 10000; // a peer is "online" if seen within this window
+const HEARTBEAT_MS = 3000; // re-announce hello this often
 const REMATCH_COOLDOWN_MS = 3000; // don't instantly re-pair with the peer you just left
 
 export type Status = "idle" | "searching" | "connected";
@@ -45,14 +43,14 @@ export interface ChatMessage {
 }
 
 /**
- * Matchmaking here uses ONLY publish/subscribe (no Ably "presence" capability
- * required, so any basic API key works):
+ * Matchmaking here uses publish/subscribe; Ably presence is used separately
+ * only for the accurate live-user count:
  *   - While searching, a client periodically publishes `hello` to `lobby`.
  *   - Any other searching client that hears a `hello` sends a private
  *     `match-request`; the recipient accepts (if free) or rejects.
  *   - The initiator of the WebRTC offer is picked by comparing clientIds, which
  *     deterministically resolves the "we both requested each other" race.
- *   - A separate `ping` heartbeat on `online` powers the live user count.
+ *   - The `online` channel presence set powers the live user count.
  */
 export function useWebRTC() {
   const [status, setStatus] = useState<Status>("idle");
@@ -82,8 +80,7 @@ export function useWebRTC() {
   const pendingReqRef = useRef<{ to: string; timer: ReturnType<typeof setTimeout> } | null>(null);
   const cooldownRef = useRef<Map<string, number>>(new Map()); // partnerId -> left-at ms
   const helloTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const pingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const onlineSeenRef = useRef<Map<string, number>>(new Map()); // clientId -> last-seen ms
+  const startInFlightRef = useRef(false);
 
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -340,18 +337,24 @@ export function useWebRTC() {
     [clearPending, commit, handleSignal, onPartnerLeft, sendTo],
   );
 
-  // --- Online count (heartbeat, no presence) ---------------------------------
-  const refreshOnline = useCallback(() => {
-    const now = Date.now();
-    const seen = onlineSeenRef.current;
-    for (const [id, ts] of seen) {
-      if (now - ts > ONLINE_TTL_MS) seen.delete(id);
+  // --- Online count (Ably presence) ------------------------------------------
+  const refreshOnline = useCallback(async (channel: RealtimeChannel) => {
+    try {
+      const members = await channel.presence.get();
+      // Count unique client IDs so a reconnect does not inflate the number.
+      setOnlineCount(new Set(members.map((member) => member.clientId)).size);
+    } catch {
+      // The chat can continue even if the optional count is temporarily unavailable.
+      setOnlineCount(0);
     }
-    setOnlineCount(seen.size);
   }, []);
 
   // --- Public actions --------------------------------------------------------
   const start = useCallback(async () => {
+    if (startInFlightRef.current || statusRef.current !== "idle") return;
+    startInFlightRef.current = true;
+
+    try {
     setMediaError(null);
 
     // 1) Local media first — no point matching without a camera/mic.
@@ -424,21 +427,14 @@ export function useWebRTC() {
     inboxRef.current = inbox;
     await inbox.subscribe(handleInbox);
 
-    // 5) Online heartbeat (pub/sub) → live count. Ably echoes our own pings, so
-    //    we count ourselves too.
+    // 5) Enter Ably presence so the live count reflects actual connected users.
     const online = client.channels.get(ONLINE);
     onlineRef.current = online;
-    await online.subscribe(PING, (msg) => {
-      const id = (msg.data as { id?: string })?.id;
-      if (id) onlineSeenRef.current.set(id, Date.now());
-      refreshOnline();
+    await online.presence.subscribe(["enter", "leave", "update"], () => {
+      void refreshOnline(online);
     });
-    const ping = () => void online.publish(PING, { id: clientId });
-    ping();
-    pingTimerRef.current = setInterval(() => {
-      ping();
-      refreshOnline();
-    }, HEARTBEAT_MS);
+    await online.presence.enter({ status: "online" });
+    await refreshOnline(online);
 
     // 6) Lobby (pub/sub): react to other searchers' announcements.
     const lobby = client.channels.get(LOBBY);
@@ -450,6 +446,9 @@ export function useWebRTC() {
 
     // 7) Start searching.
     beginSearch();
+    } finally {
+      startInFlightRef.current = false;
+    }
   }, [beginSearch, handleInbox, maybeRequest, refreshOnline]);
 
   const next = useCallback(() => {
@@ -467,13 +466,11 @@ export function useWebRTC() {
     if (partnerRef.current) sendTo(partnerRef.current, MSG.BYE, {});
     stopHello();
     clearPending();
-    if (pingTimerRef.current) {
-      clearInterval(pingTimerRef.current);
-      pingTimerRef.current = null;
-    }
     teardownPeer();
     partnerRef.current = null;
-    onlineSeenRef.current.clear();
+
+    const online = onlineRef.current;
+    if (online) void online.presence.leave().catch(() => {});
 
     localStreamRef.current?.getTracks().forEach((t) => t.stop());
     localStreamRef.current = null;
@@ -522,7 +519,9 @@ export function useWebRTC() {
     return () => {
       stopHello();
       clearPending();
-      if (pingTimerRef.current) clearInterval(pingTimerRef.current);
+      if (onlineRef.current) {
+        void onlineRef.current.presence.leave().catch(() => {});
+      }
       teardownPeer();
       localStreamRef.current?.getTracks().forEach((t) => t.stop());
       clientRef.current?.close();
