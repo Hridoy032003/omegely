@@ -63,10 +63,10 @@ export default function LegalPage({
             <div className="mt-14 rounded-2xl border border-white/10 bg-white/[0.02] p-5 text-sm text-neutral-400">
               Questions about this document? Contact us at{" "}
               <a
-                href="mailto:hello@omegley.in"
+                href="mailto:support@omegley.in"
                 className="cursor-pointer text-indigo-300 underline underline-offset-2 hover:text-indigo-200"
               >
-                hello@omegley.in
+                support@omegley.in
               </a>
               .
             </div>

@@ -77,9 +77,9 @@ export default function GuidelinesPage() {
         report it to{" "}
         <a
           className="cursor-pointer text-indigo-300 underline underline-offset-2 hover:text-indigo-200"
-          href="mailto:hello@omegley.in"
+          href="mailto:support@omegley.in"
         >
-          hello@omegley.in
+          support@omegley.in
         </a>
         . In an emergency, contact your local authorities.
       </P>

@@ -54,6 +54,28 @@ export default function Footer() {
             </ul>
           </div>
         ))}
+
+        <div>
+          <h3 className="text-sm font-semibold text-white">Contact</h3>
+          <ul className="mt-4 space-y-3">
+            <li>
+              <a
+                href="mailto:support@omegley.in"
+                className="text-sm text-neutral-400 transition-colors hover:text-white"
+              >
+                Support &amp; reports
+              </a>
+            </li>
+            <li>
+              <a
+                href="mailto:info@omegley.in"
+                className="text-sm text-neutral-400 transition-colors hover:text-white"
+              >
+                General enquiries
+              </a>
+            </li>
+          </ul>
+        </div>
       </div>
 
       <div className="border-t border-white/10">
