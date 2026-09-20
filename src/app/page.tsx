@@ -183,12 +183,6 @@ export default function Home() {
                 >
                   See how it works
                 </a>
-                <a
-                  href={process.env.NEXT_PUBLIC_PWA_URL ?? "https://omegley-pwa.vercel.app"}
-                  className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-full border border-indigo-400/30 bg-indigo-400/10 px-7 py-3.5 text-base font-medium text-indigo-200 transition hover:bg-indigo-400/20"
-                >
-                  Install mobile app
-                </a>
               </div>
 
               <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-neutral-400">

@@ -3,6 +3,7 @@ import { Inter, Sora } from "next/font/google";
 import "./globals.css";
 import CookieConsent from "@/components/CookieConsent";
 import PostHogProvider from "@/components/PostHogProvider";
+import PwaInstallPrompt from "@/components/PwaInstallPrompt";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -78,6 +79,7 @@ export default function RootLayout({
       <body>
         <PostHogProvider>{children}</PostHogProvider>
         <CookieConsent />
+        <PwaInstallPrompt />
       </body>
     </html>
   );

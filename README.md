@@ -95,7 +95,8 @@ The repository root remains the public Omegley web app so the existing Vercel
 deployment keeps working. Additional applications live in this same repository:
 
 - `apps/admin` — private moderation and operations dashboard.
-- `apps/pwa` — installable mobile web app.
+- The public app at the repository root is also the installable PWA. Its `/`
+  and `/chat` routes stay unchanged for users.
 - `packages` — browser-safe shared types and utilities.
 
 All applications may use the same Supabase project. Public browser apps use only

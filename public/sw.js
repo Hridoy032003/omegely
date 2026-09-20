@@ -1,14 +1,7 @@
-const CACHE = "omegley-pwa-shell-v1";
+const CACHE_NAME = "omegley-shell-v1";
 
-self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE));
-  self.skipWaiting();
-});
-
-self.addEventListener("activate", (event) => {
-  event.waitUntil(self.clients.claim());
-});
-
+self.addEventListener("install", () => self.skipWaiting());
+self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   const url = new URL(event.request.url);
