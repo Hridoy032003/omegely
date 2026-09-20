@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase-browser";
+import { LogoMark } from "@/components/logo";
 import type { User } from "@supabase/supabase-js";
 
 type Profile = {
@@ -13,12 +15,28 @@ type Profile = {
 
 const EMPTY_PROFILE: Profile = { display_name: "", avatar_url: "", bio: "", interests: [] };
 
+function googleDetails(user: User) {
+  const metadata = user.user_metadata ?? {};
+  const name = typeof metadata.full_name === "string"
+    ? metadata.full_name
+    : typeof metadata.name === "string"
+      ? metadata.name
+      : user.email?.split("@")[0] || "Omegley user";
+  const avatar = typeof metadata.avatar_url === "string"
+    ? metadata.avatar_url
+    : typeof metadata.picture === "string"
+      ? metadata.picture
+      : "";
+  return { name, avatar };
+}
+
 export default function AccountPanel() {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile>(EMPTY_PROFILE);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [mode, setMode] = useState<"login" | "signup">("login");
+  const [editing, setEditing] = useState(false);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -30,22 +48,13 @@ export default function AccountPanel() {
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
       if (session?.user) void loadProfile(session.user);
+      else setProfile(EMPTY_PROFILE);
     });
     return () => data.subscription.unsubscribe();
   }, []);
 
   const loadProfile = async (currentUser: User) => {
-    const metadata = currentUser.user_metadata ?? {};
-    const googleName = typeof metadata.full_name === "string"
-      ? metadata.full_name
-      : typeof metadata.name === "string"
-        ? metadata.name
-        : "";
-    const googleAvatar = typeof metadata.avatar_url === "string"
-      ? metadata.avatar_url
-      : typeof metadata.picture === "string"
-        ? metadata.picture
-        : "";
+    const google = googleDetails(currentUser);
     const { data } = await supabase
       .from("profiles")
       .select("display_name, avatar_url, bio, interests")
@@ -54,16 +63,15 @@ export default function AccountPanel() {
     const nextProfile = {
       ...EMPTY_PROFILE,
       ...(data ?? {}),
-      display_name: data?.display_name || googleName,
-      avatar_url: googleAvatar || data?.avatar_url || "",
+      display_name: data?.display_name || google.name,
+      avatar_url: google.avatar || data?.avatar_url || "",
     };
     setProfile(nextProfile);
 
-    // Persist Google profile details once so the admin dashboard can use them.
-    if (data && (googleName || googleAvatar) && (!data.display_name || !data.avatar_url)) {
+    if (data && (google.name || google.avatar) && (!data.display_name || !data.avatar_url)) {
       void supabase.from("profiles").update({
-        display_name: data.display_name || googleName || null,
-        avatar_url: data.avatar_url || googleAvatar || null,
+        display_name: data.display_name || google.name || null,
+        avatar_url: data.avatar_url || google.avatar || null,
         updated_at: new Date().toISOString(),
       }).eq("id", currentUser.id);
     }
@@ -98,46 +106,73 @@ export default function AccountPanel() {
       interests: profile.interests ?? [],
       updated_at: new Date().toISOString(),
     }).eq("id", user.id);
-    setMessage(error?.message ?? "Profile saved.");
+    setMessage(error?.message ?? "Profile saved successfully.");
+    if (!error) setEditing(false);
     setBusy(false);
   };
 
-  return (
-    <main className="container-page min-h-screen py-16">
-      <div className="mx-auto max-w-xl">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-300">Omegley account</p>
-        <h1 className="mt-4 font-display text-4xl font-extrabold text-white">Your profile, your choice.</h1>
-        <p className="mt-4 text-neutral-400">An account is optional. You can still start a random chat without registering.</p>
+  const name = profile.display_name || (user ? googleDetails(user).name : "Omegley user");
+  const initials = name.trim().slice(0, 1).toUpperCase() || "O";
+  const provider = user?.app_metadata.provider === "google" || user?.app_metadata.providers?.includes("google") ? "Google" : "Email and password";
 
-        {user ? (
-          <form onSubmit={saveProfile} className="mt-10 space-y-4 rounded-2xl border border-white/10 bg-white/[0.03] p-6">
-            <p className="text-sm text-neutral-400">Signed in as <span className="text-white">{user.email}</span></p>
-            {profile.avatar_url && (
-              <img src={profile.avatar_url} alt="Your Google profile" className="h-16 w-16 rounded-full border border-white/15 object-cover" referrerPolicy="no-referrer" />
-            )}
-            <input className="account-input" placeholder="Display name" value={profile.display_name ?? ""} onChange={(e) => setProfile({ ...profile, display_name: e.target.value })} />
-            <textarea className="account-input min-h-28" placeholder="Short bio" value={profile.bio ?? ""} onChange={(e) => setProfile({ ...profile, bio: e.target.value })} />
-            <input className="account-input" placeholder="Interests, separated by commas" value={(profile.interests ?? []).join(", ")} onChange={(e) => setProfile({ ...profile, interests: e.target.value.split(",").map((item) => item.trim()).filter(Boolean) })} />
-            <div className="flex flex-wrap gap-3">
-              <button disabled={busy} className="rounded-full bg-indigo-500 px-5 py-2.5 text-sm font-semibold text-white" type="submit">Save profile</button>
-              <button type="button" className="rounded-full border border-white/15 px-5 py-2.5 text-sm text-neutral-200" onClick={() => void supabase.auth.signOut()}>Sign out</button>
+  return (
+    <main className="account-page">
+      <header className="account-nav">
+        <Link href="/" className="account-logo"><LogoMark className="h-8 w-8" title="Omegley" /> Omegley</Link>
+        <div className="account-nav-actions">
+          <Link href="/chat" className="account-chat-link">Start chatting <span>→</span></Link>
+          {user ? <button type="button" className="account-signout" onClick={() => void supabase.auth.signOut()}>Sign out</button> : <Link href="/" className="account-back-link">Back home</Link>}
+        </div>
+      </header>
+
+      {user ? (
+        <div className="account-content">
+          <div className="account-page-heading">
+            <div><p className="account-eyebrow">ACCOUNT SETTINGS</p><h1>Welcome back, {name.split(" ")[0]}.</h1><p>Manage how you appear when you choose to use an account.</p></div>
+            <span className="account-active"><i /> Account active</span>
+          </div>
+
+          <section className="account-profile-hero">
+            <div className="account-hero-glow" />
+            <div className="account-profile-summary">
+              {profile.avatar_url ? <img src={profile.avatar_url} alt={`${name}'s Google profile`} className="account-avatar" referrerPolicy="no-referrer" /> : <span className="account-avatar account-avatar-fallback">{initials}</span>}
+              <div className="account-summary-copy"><h2>{name}</h2><p>{user.email}</p><span className="connected-pill"><i /> {provider} connected</span></div>
+              <button type="button" className="account-edit-button" onClick={() => { setEditing((value) => !value); setMessage(""); }}>{editing ? "Close editor" : "Edit profile"}</button>
             </div>
-          </form>
-        ) : (
-          <form onSubmit={authenticate} className="mt-10 space-y-4 rounded-2xl border border-white/10 bg-white/[0.03] p-6">
-            <div className="flex gap-2 rounded-full bg-white/5 p-1 text-sm">
-              <button type="button" className={`flex-1 rounded-full px-4 py-2 ${mode === "login" ? "bg-white text-neutral-950" : "text-neutral-300"}`} onClick={() => setMode("login")}>Sign in</button>
-              <button type="button" className={`flex-1 rounded-full px-4 py-2 ${mode === "signup" ? "bg-white text-neutral-950" : "text-neutral-300"}`} onClick={() => setMode("signup")}>Create account</button>
-            </div>
-            <input className="account-input" required type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
-            <input className="account-input" required minLength={8} type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
-            <button disabled={busy} className="w-full rounded-full bg-indigo-500 px-5 py-2.5 text-sm font-semibold text-white" type="submit">{mode === "login" ? "Sign in" : "Register"}</button>
-            <div className="flex items-center gap-3 text-xs text-neutral-600"><span className="h-px flex-1 bg-white/10" />OR<span className="h-px flex-1 bg-white/10" /></div>
-            <button type="button" className="w-full rounded-full border border-white/15 px-5 py-2.5 text-sm text-neutral-200" onClick={() => void google()}>Continue with Google</button>
-          </form>
-        )}
-        {message && <p className="mt-4 text-sm text-indigo-200">{message}</p>}
-      </div>
+          </section>
+
+          <div className="account-workspace">
+            <section className="account-section">
+              <div className="account-section-heading"><div><p className="account-eyebrow">PUBLIC PROFILE</p><h2>Profile details</h2><p>These details help people know who they are talking to.</p></div>{!editing && <button type="button" className="account-text-button" onClick={() => setEditing(true)}>Edit details</button>}</div>
+              {editing ? (
+                <form onSubmit={saveProfile} className="account-edit-form">
+                  <label>Display name<input className="account-input" placeholder="Your name" value={profile.display_name ?? ""} onChange={(event) => setProfile({ ...profile, display_name: event.target.value })} /></label>
+                  <label>About you<textarea className="account-input account-textarea" placeholder="A short introduction (optional)" value={profile.bio ?? ""} onChange={(event) => setProfile({ ...profile, bio: event.target.value })} /></label>
+                  <label>Interests <span className="field-hint">Separate with commas</span><input className="account-input" placeholder="Music, travel, gaming" value={(profile.interests ?? []).join(", ")} onChange={(event) => setProfile({ ...profile, interests: event.target.value.split(",").map((item) => item.trim()).filter(Boolean) })} /></label>
+                  <div className="account-form-actions"><button disabled={busy} className="account-save-button" type="submit">{busy ? "Saving…" : "Save changes"}</button><button disabled={busy} type="button" className="account-cancel-button" onClick={() => { setEditing(false); setMessage(""); }}>Cancel</button></div>
+                </form>
+              ) : (
+                <div className="profile-details-readonly"><div><span>Display name</span><strong>{name}</strong></div><div><span>About</span><strong>{profile.bio || "No bio added yet."}</strong></div><div><span>Interests</span><div className="interest-list">{profile.interests?.length ? profile.interests.map((interest) => <span key={interest}>{interest}</span>) : <strong>No interests added yet.</strong>}</div></div></div>
+              )}
+              {message && <p className={`account-message ${message.includes("success") || message === "Profile saved successfully." ? "success" : ""}`}>{message}</p>}
+            </section>
+
+            <aside className="account-sidebar-content">
+              <section className="account-info-section"><p className="account-eyebrow">ACCOUNT</p><h2>Account details</h2><div className="account-info-row"><span>Email</span><strong>{user.email}</strong></div><div className="account-info-row"><span>Sign-in method</span><strong>{provider}</strong></div><div className="account-info-row"><span>Member since</span><strong>{formatMemberDate(user.created_at)}</strong></div></section>
+              <section className="account-info-section account-privacy-note"><p className="account-eyebrow">YOUR PRIVACY</p><h2>Stay in control</h2><p>Your account is optional. You can still use random chat without signing in. Profile details are only used to improve your experience.</p><Link href="/privacy">Read our privacy policy →</Link></section>
+            </aside>
+          </div>
+        </div>
+      ) : (
+        <div className="account-auth-layout">
+          <section className="account-auth-intro"><p className="account-eyebrow">OMEGLEY ACCOUNT</p><h1>Your profile,<br /><span>your choice.</span></h1><p>An account is optional. Save a profile for a more personal experience, or jump straight into random chat without registering.</p><div className="auth-benefits"><span><i>✓</i> Google profile sync</span><span><i>✓</i> Your profile, your control</span><span><i>✓</i> Chat without an account</span></div></section>
+          <section className="account-auth-panel"><div className="auth-tabs"><button type="button" className={mode === "login" ? "active" : ""} onClick={() => setMode("login")}>Sign in</button><button type="button" className={mode === "signup" ? "active" : ""} onClick={() => setMode("signup")}>Create account</button></div><form onSubmit={authenticate} className="auth-form"><label>Email<input className="account-input" required type="email" placeholder="you@example.com" value={email} onChange={(event) => setEmail(event.target.value)} /></label><label>Password<input className="account-input" required minLength={8} type="password" placeholder="At least 8 characters" value={password} onChange={(event) => setPassword(event.target.value)} /></label><button disabled={busy} className="account-save-button auth-submit" type="submit">{busy ? "Please wait…" : mode === "login" ? "Sign in" : "Create account"}<span>→</span></button></form><div className="auth-divider"><span />or<span /></div><button type="button" className="google-button" onClick={() => void google()}><span className="google-g">G</span> Continue with Google</button><p className="auth-note">By continuing, you agree to use Omegley respectfully and follow our community guidelines.</p>{message && <p className="account-message">{message}</p>}</section>
+        </div>
+      )}
     </main>
   );
+}
+
+function formatMemberDate(value: string) {
+  return new Intl.DateTimeFormat(undefined, { month: "long", year: "numeric" }).format(new Date(value));
 }
