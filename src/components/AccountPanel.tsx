@@ -30,6 +30,17 @@ function googleDetails(user: User) {
   return { name, avatar };
 }
 
+function GoogleMark() {
+  return (
+    <svg aria-hidden="true" className="google-mark" viewBox="0 0 24 24">
+      <path fill="#4285F4" d="M21.35 12.27c0-.79-.07-1.55-.23-2.27H12v4.3h5.24a4.48 4.48 0 0 1-1.94 2.94v2.45h3.14c1.84-1.69 2.91-4.18 2.91-7.42Z" />
+      <path fill="#34A853" d="M12 21.75c2.63 0 4.84-.87 6.45-2.36l-3.14-2.45c-.87.58-1.98.93-3.31.93-2.54 0-4.7-1.72-5.47-4.03H3.28v2.52A9.75 9.75 0 0 0 12 21.75Z" />
+      <path fill="#FBBC05" d="M6.53 13.84A5.86 5.86 0 0 1 6.22 12c0-.64.11-1.26.31-1.84V7.64H3.28A9.75 9.75 0 0 0 2.25 12c0 1.57.38 3.05 1.03 4.36l3.25-2.52Z" />
+      <path fill="#EA4335" d="M12 6.13c1.43 0 2.71.49 3.72 1.45l2.79-2.79C16.84 3.2 14.63 2.25 12 2.25a9.75 9.75 0 0 0-8.72 5.39l3.25 2.52c.77-2.31 2.93-4.03 5.47-4.03Z" />
+    </svg>
+  );
+}
+
 export default function AccountPanel() {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile>(EMPTY_PROFILE);
@@ -128,15 +139,13 @@ export default function AccountPanel() {
       {user ? (
         <div className="account-content">
           <div className="account-page-heading">
-            <div><p className="account-eyebrow">ACCOUNT SETTINGS</p><h1>Welcome back, {name.split(" ")[0]}.</h1><p>Manage how you appear when you choose to use an account.</p></div>
-            <span className="account-active"><i /> Account active</span>
+            <div><p className="account-eyebrow">ACCOUNT SETTINGS</p><h1>Welcome back, {name.split(" ")[0]}.</h1><p>Manage your profile and account preferences.</p></div>
           </div>
 
           <section className="account-profile-hero">
-            <div className="account-hero-glow" />
             <div className="account-profile-summary">
               {profile.avatar_url ? <img src={profile.avatar_url} alt={`${name}'s Google profile`} className="account-avatar" referrerPolicy="no-referrer" /> : <span className="account-avatar account-avatar-fallback">{initials}</span>}
-              <div className="account-summary-copy"><h2>{name}</h2><p>{user.email}</p><span className="connected-pill"><i /> {provider} connected</span></div>
+              <div className="account-summary-copy"><h2>{name}</h2><p>{user.email}</p></div>
               <button type="button" className="account-edit-button" onClick={() => { setEditing((value) => !value); setMessage(""); }}>{editing ? "Close editor" : "Edit profile"}</button>
             </div>
           </section>
@@ -166,7 +175,7 @@ export default function AccountPanel() {
       ) : (
         <div className="account-auth-layout">
           <section className="account-auth-intro"><p className="account-eyebrow">OMEGLEY ACCOUNT</p><h1>Your profile,<br /><span>your choice.</span></h1><p>An account is optional. Save a profile for a more personal experience, or jump straight into random chat without registering.</p><div className="auth-benefits"><span><i>✓</i> Google profile sync</span><span><i>✓</i> Your profile, your control</span><span><i>✓</i> Chat without an account</span></div></section>
-          <section className="account-auth-panel"><div className="auth-tabs"><button type="button" className={mode === "login" ? "active" : ""} onClick={() => setMode("login")}>Sign in</button><button type="button" className={mode === "signup" ? "active" : ""} onClick={() => setMode("signup")}>Create account</button></div><form onSubmit={authenticate} className="auth-form"><label>Email<input className="account-input" required type="email" placeholder="you@example.com" value={email} onChange={(event) => setEmail(event.target.value)} /></label><label>Password<input className="account-input" required minLength={8} type="password" placeholder="At least 8 characters" value={password} onChange={(event) => setPassword(event.target.value)} /></label><button disabled={busy} className="account-save-button auth-submit" type="submit">{busy ? "Please wait…" : mode === "login" ? "Sign in" : "Create account"}<span>→</span></button></form><div className="auth-divider"><span />or<span /></div><button type="button" className="google-button" onClick={() => void google()}><span className="google-g">G</span> Continue with Google</button><p className="auth-note">By continuing, you agree to use Omegley respectfully and follow our community guidelines.</p>{message && <p className="account-message">{message}</p>}</section>
+          <section className="account-auth-panel"><div className="auth-tabs"><button type="button" className={mode === "login" ? "active" : ""} onClick={() => setMode("login")}>Sign in</button><button type="button" className={mode === "signup" ? "active" : ""} onClick={() => setMode("signup")}>Create account</button></div><form onSubmit={authenticate} className="auth-form"><label>Email<input className="account-input" required type="email" placeholder="you@example.com" value={email} onChange={(event) => setEmail(event.target.value)} /></label><label>Password<input className="account-input" required minLength={8} type="password" placeholder="At least 8 characters" value={password} onChange={(event) => setPassword(event.target.value)} /></label><button disabled={busy} className="account-save-button auth-submit" type="submit">{busy ? "Please wait…" : mode === "login" ? "Sign in" : "Create account"}<span>→</span></button></form><div className="auth-divider"><span />or<span /></div><button type="button" className="google-button" onClick={() => void google()}><GoogleMark /> Continue with Google</button><p className="auth-note">By continuing, you agree to use Omegley respectfully and follow our community guidelines.</p>{message && <p className="account-message">{message}</p>}</section>
         </div>
       )}
     </main>
