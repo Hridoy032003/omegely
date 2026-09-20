@@ -11,16 +11,31 @@ export default function AdminPage() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    void supabase.auth.getUser().then(({ data }) => setSignedIn(Boolean(data.user)));
+    void supabase.auth.getSession().then(({ data }) => {
+      if (data.session) void verifyAdmin(data.session.access_token);
+    });
   }, []);
+
+  const verifyAdmin = async (accessToken: string) => {
+    const response = await fetch("/api/admin/session", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (response.ok) {
+      setSignedIn(true);
+      return true;
+    }
+    await supabase.auth.signOut();
+    setMessage(response.status === 403 ? "This account is not an approved admin." : "Admin session expired.");
+    return false;
+  };
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setBusy(true);
     setMessage("");
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) setMessage(error.message);
-    else setSignedIn(true);
+    else if (data.session) await verifyAdmin(data.session.access_token);
     setBusy(false);
   };
 
