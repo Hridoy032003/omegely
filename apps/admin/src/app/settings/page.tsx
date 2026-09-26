@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAdmin } from "@/lib/admin-store";
-import { Panel, PanelHead, formatCoins, formatDollars } from "@/components/ui";
+import { Panel, PanelHead, formatCoins } from "@/components/ui";
 
 type Settings = {
   withdrawals_enabled: boolean;
@@ -128,8 +128,7 @@ export default function SettingsPage() {
             <p className="muted" style={{ margin: 0 }}>
               Current threshold{" "}
               <strong className="mono" style={{ color: "var(--ink)" }}>
-                {formatCoins(draft.withdrawal_minimum_coins)} coins ·{" "}
-                {formatDollars(draft.withdrawal_minimum_coins)}
+                {formatCoins(draft.withdrawal_minimum_coins)} coins
               </strong>
             </p>
           </div>

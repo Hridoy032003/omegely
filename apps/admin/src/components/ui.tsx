@@ -112,10 +112,6 @@ export function formatCoins(value: number) {
   return new Intl.NumberFormat().format(value);
 }
 
-export function formatDollars(coins: number) {
-  return (coins / 100).toLocaleString(undefined, { style: "currency", currency: "USD" });
-}
-
 export function initial(value: string | null | undefined, fallback = "U") {
   return (value || fallback).trim().slice(0, 1).toUpperCase();
 }

@@ -893,6 +893,35 @@ tbody tr:hover {
   gap: 6px;
 }
 
+.complaint-cell {
+  min-width: 240px;
+  max-width: 360px;
+}
+
+.complaint-cell strong,
+.complaint-cell span {
+  display: block;
+}
+
+.complaint-cell strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.complaint-cell span {
+  margin-top: 4px;
+  color: var(--ink-3);
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: normal;
+}
+
+.complaint-reply {
+  min-height: 58px;
+  margin-top: 10px;
+  resize: vertical;
+}
+
 /* -------------------------------------------------------------------- badges */
 .badge {
   display: inline-flex;

@@ -253,7 +253,7 @@ export default function AccountPanel() {
             <ul className="mt-9 grid gap-3">
               {[
                 "Sign in with Google or an email address",
-                "Earn 100 coins ($1) for every qualified referral",
+                "Earn 100 coins for every qualified referral",
                 "Chat without an account whenever you prefer",
               ].map((line) => (
                 <li key={line} className="flex items-center gap-3 text-sm text-ink-2">
@@ -540,11 +540,9 @@ export default function AccountPanel() {
                 <span className="font-display text-4xl font-semibold tracking-tight text-ink">
                   {availableCoins.toLocaleString()}
                 </span>
-                <span className="text-sm text-brand-ink">
-                  available coins · ${(availableCoins / 100).toFixed(2)}
-                </span>
+                <span className="text-sm text-brand-ink">available coins</span>
               </p>
-              <p className="mt-2 text-2xs text-ink-4">100 coins = $1 estimated reward value</p>
+              <p title="100 coins = 1 dollar" className="mt-2 text-2xs text-ink-4">100 coins = 1 dollar. Coins are the wallet unit.</p>
               <Link href="/wallet" className={`${buttonClass({ variant: "brand", size: "sm", block: true })} mt-5`}>
                 Open wallet
                 <ArrowRight className="h-4 w-4" />

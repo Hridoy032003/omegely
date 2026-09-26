@@ -34,13 +34,21 @@ type CoinTransaction = { id: string; amount: number; description: string; create
 type WithdrawalRequest = {
   id: string;
   amount_coins: number;
-  amount_usd: number;
   method: "gift_card" | "cash_pending";
   status: "pending" | "approved" | "rejected" | "paid";
   created_at: string;
 };
 
-const COINS_PER_DOLLAR = 100;
+type WithdrawalComplaint = {
+  id: string;
+  withdrawal_id: string;
+  subject: string;
+  message: string;
+  status: "open" | "in_review" | "resolved" | "rejected";
+  admin_reply: string | null;
+  created_at: string;
+};
+
 const DEFAULT_WITHDRAWAL_MINIMUM = 5000;
 const EMPTY_WALLET: WalletProfile = {
   displayName: "Omegley user",
@@ -72,10 +80,6 @@ function formatDate(value: string) {
 
 function formatCoins(value: number) {
   return new Intl.NumberFormat().format(value);
-}
-
-function formatDollars(coins: number) {
-  return (coins / COINS_PER_DOLLAR).toLocaleString(undefined, { style: "currency", currency: "USD" });
 }
 
 function WalletIcon({ name, className = "h-[18px] w-[18px]" }: { name: keyof typeof ICON_PATHS; className?: string }) {
@@ -140,6 +144,7 @@ export default function WalletPanel() {
   const [wallet, setWallet] = useState<WalletProfile>(EMPTY_WALLET);
   const [transactions, setTransactions] = useState<CoinTransaction[]>([]);
   const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([]);
+  const [complaints, setComplaints] = useState<WithdrawalComplaint[]>([]);
   const [activeTab, setActiveTab] = useState<"earn" | "redeem">("earn");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -150,6 +155,10 @@ export default function WalletPanel() {
   const [withdrawalsEnabled, setWithdrawalsEnabled] = useState(true);
   const [withdrawalMethod, setWithdrawalMethod] = useState<"gift_card" | "cash_pending">("gift_card");
   const [withdrawalDestination, setWithdrawalDestination] = useState("");
+  const [complaintWithdrawalId, setComplaintWithdrawalId] = useState<string | null>(null);
+  const [complaintSubject, setComplaintSubject] = useState("");
+  const [complaintMessage, setComplaintMessage] = useState("");
+  const [complaintBusy, setComplaintBusy] = useState(false);
 
   const loadWallet = useCallback(async (currentUser: User) => {
     const anonymousWallet = window.localStorage.getItem("omegley_anonymous_wallet");
@@ -158,7 +167,7 @@ export default function WalletPanel() {
       if (Number(claimed ?? 0) > 0) window.localStorage.removeItem("omegley_anonymous_wallet");
     }
 
-    const [profileResult, transactionsResult, withdrawalsResult, settingsResult] = await Promise.all([
+    const [profileResult, transactionsResult, withdrawalsResult, complaintsResult, settingsResult] = await Promise.all([
       supabase
         .from("profiles")
         .select("display_name, referral_code, coin_balance, total_earned, reserved_coins")
@@ -172,7 +181,13 @@ export default function WalletPanel() {
         .limit(12),
       supabase
         .from("withdrawal_requests")
-        .select("id, amount_coins, amount_usd, method, status, created_at")
+        .select("id, amount_coins, method, status, created_at")
+        .eq("user_id", currentUser.id)
+        .order("created_at", { ascending: false })
+        .limit(10),
+      supabase
+        .from("withdrawal_complaints")
+        .select("id, withdrawal_id, subject, message, status, admin_reply, created_at")
         .eq("user_id", currentUser.id)
         .order("created_at", { ascending: false })
         .limit(10),
@@ -191,6 +206,7 @@ export default function WalletPanel() {
     });
     setTransactions((transactionsResult.data ?? []) as CoinTransaction[]);
     setWithdrawals((withdrawalsResult.data ?? []) as WithdrawalRequest[]);
+    setComplaints((complaintsResult.data ?? []) as WithdrawalComplaint[]);
 
     const publicSettings = Array.isArray(settingsResult.data) ? settingsResult.data[0] : settingsResult.data;
     if (publicSettings) {
@@ -227,6 +243,7 @@ export default function WalletPanel() {
         setWallet(EMPTY_WALLET);
         setTransactions([]);
         setWithdrawals([]);
+        setComplaints([]);
       }
       if (mounted) setLoading(false);
     };
@@ -306,6 +323,31 @@ export default function WalletPanel() {
     setBusy(false);
   };
 
+  const fileComplaint = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!user || !complaintWithdrawalId || complaintBusy) return;
+    setComplaintBusy(true);
+    setNotice(null);
+    const { data: complaintId, error } = await supabase.rpc("file_withdrawal_complaint", {
+      p_withdrawal_id: complaintWithdrawalId,
+      p_subject: complaintSubject.trim(),
+      p_message: complaintMessage.trim(),
+    });
+    if (error || !complaintId) {
+      setNotice({
+        tone: "error",
+        text: error?.message || "You can file one complaint per request, with a maximum of three complaints in 12 hours.",
+      });
+    } else {
+      setNotice({ tone: "success", text: "Your complaint was submitted. We will review it shortly." });
+      setComplaintWithdrawalId(null);
+      setComplaintSubject("");
+      setComplaintMessage("");
+      await loadWallet(user);
+    }
+    setComplaintBusy(false);
+  };
+
   if (loading) {
     return (
       <main className="min-h-dvh">
@@ -346,7 +388,7 @@ export default function WalletPanel() {
                 Create an account
               </Link>
             </div>
-            <p className="mt-6 text-2xs text-ink-4">100 coins = $1 estimated reward value</p>
+            <p className="mt-6 text-2xs text-ink-4">100 coins = 1 dollar. Coins are the wallet unit.</p>
           </div>
 
           <Panel tone="brand" className="p-6 sm:p-7">
@@ -358,7 +400,7 @@ export default function WalletPanel() {
             <p className="mt-6 font-display text-4xl font-semibold tracking-tight text-ink">
               1,250 <span className="text-base font-medium text-ink-3">coins</span>
             </p>
-            <p className="mt-1 text-sm text-ink-3">$12.50 estimated value</p>
+            <p className="mt-1 text-sm text-ink-3">100 coins = 1 dollar</p>
             <div className="mt-6 border-t border-line">
               <PreviewRow label="Complete a connection" value="+10" />
               <PreviewRow label="Successful referral" value="+100" />
@@ -386,9 +428,9 @@ export default function WalletPanel() {
           title="Make every connection count."
           lede={`Welcome back, ${wallet.displayName.split(" ")[0]}. Earn, track, and redeem your Omegley coins.`}
           aside={
-            <div className="border-line sm:border-l sm:pl-5">
+            <div title="100 coins = 1 dollar" className="border-line sm:border-l sm:pl-5">
               <p className="font-display text-lg font-semibold text-ink">100 coins</p>
-              <p className="text-sm text-ink-3">= $1 reward value</p>
+              <p className="text-sm text-ink-3">1 dollar reward value</p>
             </div>
           }
         />
@@ -396,7 +438,7 @@ export default function WalletPanel() {
         <Panel tone="brand" className="mt-10 grid gap-8 p-6 sm:grid-cols-2 sm:p-7 lg:grid-cols-4">
           <div>
             <p className="flex items-center gap-2 text-2xs font-semibold uppercase tracking-[0.14em] text-brand-ink">
-              <WalletIcon name="coins" /> Available balance
+              <span title="100 coins = 1 dollar"><WalletIcon name="coins" /> Available to withdraw</span>
             </p>
             <p className="mt-3 flex items-baseline gap-2">
               <span className="font-display text-4xl font-semibold tracking-tight text-ink">
@@ -404,14 +446,10 @@ export default function WalletPanel() {
               </span>
               <span className="text-sm text-ink-3">coins</span>
             </p>
-            <p className="mt-1 text-sm text-ink-3">{formatDollars(availableCoins)} estimated value</p>
+            <p className="mt-1 text-sm text-ink-3">100 coins = 1 dollar</p>
           </div>
-          <Stat label="Lifetime earned" value={formatCoins(wallet.totalEarned)} sub={formatDollars(wallet.totalEarned)} />
-          <Stat
-            label="Pending redemption"
-            value={formatCoins(wallet.reservedCoins)}
-            sub={formatDollars(wallet.reservedCoins)}
-          />
+          <Stat label="Total wallet" value={formatCoins(wallet.coinBalance)} sub="All coins earned or reserved" />
+          <Stat label="Pending withdrawal" value={formatCoins(wallet.reservedCoins)} sub="Reserved for review" />
           <div>
             <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-ink-3">Next reward</p>
             <p className="mt-2 font-display text-2xl font-semibold tracking-tight text-ink">+10 coins</p>
@@ -630,7 +668,7 @@ export default function WalletPanel() {
 
                   <div className="flex items-center justify-between rounded-control bg-white/[0.03] px-4 py-3">
                     <span className="text-sm text-ink-3">Estimated reward</span>
-                    <span className="font-medium text-ink">{formatDollars(Number(withdrawalAmount) || 0)}</span>
+                    <span className="font-medium text-ink">{formatCoins(Number(withdrawalAmount) || 0)} coins</span>
                   </div>
 
                   <Button type="submit" variant="brand" block disabled={busy || !withdrawalsEnabled || !canRedeem}>
@@ -652,22 +690,26 @@ export default function WalletPanel() {
                   <PanelHead label="Redemption details" title="Before you redeem" />
                   <dl className="mt-5">
                     <RuleRow label="Minimum balance" value={`${formatCoins(withdrawalMinimum)} coins`} />
-                    <RuleRow label="Current value" value="100 coins = $1" />
+                    <RuleRow label="Coin value" value="100 coins = 1 dollar" />
                     <RuleRow label="Review process" value="Admin approval" />
                   </dl>
                 </Panel>
-                <HistoryPanel
-                  label="Request history"
-                  title="Recent redemptions"
-                  empty="You have not submitted a redemption request yet."
-                  rows={withdrawals.map((withdrawal) => ({
-                    id: withdrawal.id,
-                    title: `${formatCoins(withdrawal.amount_coins)} coins · ${
-                      withdrawal.method === "gift_card" ? "Gift card" : "Cash payout"
-                    }`,
-                    sub: formatDate(withdrawal.created_at),
-                    right: <Badge tone={STATUS_TONE[withdrawal.status]}>{withdrawal.status}</Badge>,
-                  }))}
+                <WithdrawalHistoryPanel
+                  withdrawals={withdrawals}
+                  complaints={complaints}
+                  complaintWithdrawalId={complaintWithdrawalId}
+                  complaintSubject={complaintSubject}
+                  complaintMessage={complaintMessage}
+                  complaintBusy={complaintBusy}
+                  onOpenComplaint={(withdrawalId) => {
+                    setComplaintWithdrawalId(withdrawalId);
+                    setComplaintSubject("");
+                    setComplaintMessage("");
+                    setNotice(null);
+                  }}
+                  onSubjectChange={setComplaintSubject}
+                  onMessageChange={setComplaintMessage}
+                  onSubmit={fileComplaint}
                 />
               </div>
             </>
@@ -751,6 +793,115 @@ function HistoryPanel({
         </div>
       ) : (
         <p className="mt-5 border-t border-line pt-4 text-sm leading-relaxed text-ink-4">{empty}</p>
+      )}
+    </Panel>
+  );
+}
+
+function WithdrawalHistoryPanel({
+  withdrawals,
+  complaints,
+  complaintWithdrawalId,
+  complaintSubject,
+  complaintMessage,
+  complaintBusy,
+  onOpenComplaint,
+  onSubjectChange,
+  onMessageChange,
+  onSubmit,
+}: {
+  withdrawals: WithdrawalRequest[];
+  complaints: WithdrawalComplaint[];
+  complaintWithdrawalId: string | null;
+  complaintSubject: string;
+  complaintMessage: string;
+  complaintBusy: boolean;
+  onOpenComplaint: (withdrawalId: string | null) => void;
+  onSubjectChange: (value: string) => void;
+  onMessageChange: (value: string) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  const complaintByWithdrawal = new Map(complaints.map((complaint) => [complaint.withdrawal_id, complaint]));
+
+  return (
+    <Panel className="p-6">
+      <PanelHead
+        label="Request history"
+        title="Recent redemptions"
+        description="Keep the request ID if you need support. You can file up to 3 complaints in 12 hours."
+      />
+      {withdrawals.length ? (
+        <div className="mt-5 border-t border-line">
+          {withdrawals.map((withdrawal) => {
+            const complaint = complaintByWithdrawal.get(withdrawal.id);
+            const isFiling = complaintWithdrawalId === withdrawal.id;
+            return (
+              <div key={withdrawal.id} className="border-b border-line py-4 last:border-b-0">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="text-sm text-ink-2">
+                      {formatCoins(withdrawal.amount_coins)} coins · {withdrawal.method === "gift_card" ? "Gift card" : "Cash payout"}
+                    </p>
+                    <p className="mt-1 truncate font-mono text-2xs text-ink-4" title={withdrawal.id}>
+                      Request ID: {withdrawal.id}
+                    </p>
+                    <p className="mt-1 text-2xs text-ink-4">{formatDate(withdrawal.created_at)}</p>
+                  </div>
+                  <Badge tone={STATUS_TONE[withdrawal.status]}>{withdrawal.status}</Badge>
+                </div>
+                {complaint ? (
+                  <p className="mt-3 text-2xs text-ink-3">
+                    Complaint: <span className="text-ink-2">{complaint.status.replace("_", " ")}</span>
+                    {complaint.admin_reply ? ` · ${complaint.admin_reply}` : ""}
+                  </p>
+                ) : isFiling ? (
+                  <form onSubmit={onSubmit} className="mt-4 grid gap-3 rounded-control border border-line bg-white/[0.02] p-3">
+                    <Field label="Complaint subject" htmlFor={`complaint-subject-${withdrawal.id}`}>
+                      <input
+                        id={`complaint-subject-${withdrawal.id}`}
+                        className={CONTROL}
+                        required
+                        minLength={3}
+                        maxLength={120}
+                        value={complaintSubject}
+                        onChange={(event) => onSubjectChange(event.target.value)}
+                        placeholder="What went wrong?"
+                      />
+                    </Field>
+                    <Field label="Details" htmlFor={`complaint-message-${withdrawal.id}`} hint="10–2,000 characters">
+                      <textarea
+                        id={`complaint-message-${withdrawal.id}`}
+                        className={`${CONTROL} min-h-24 resize-y`}
+                        required
+                        minLength={10}
+                        maxLength={2000}
+                        value={complaintMessage}
+                        onChange={(event) => onMessageChange(event.target.value)}
+                        placeholder="Tell us what happened with this withdrawal."
+                      />
+                    </Field>
+                    <div className="flex flex-wrap gap-2">
+                      <Button type="submit" size="sm" variant="brand" disabled={complaintBusy}>
+                        {complaintBusy ? "Submitting…" : "Submit complaint"}
+                      </Button>
+                      <Button type="button" size="sm" variant="outline" onClick={() => onOpenComplaint(null)}>Cancel</Button>
+                    </div>
+                  </form>
+                ) : (
+                  <button
+                    type="button"
+                    className="mt-3 text-2xs font-medium text-brand-ink transition-colors hover:text-ink"
+                    onClick={() => onOpenComplaint(withdrawal.id)}
+                  >
+                    File a complaint
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="mt-5 border-t border-line pt-4 text-sm leading-relaxed text-ink-4">You have not submitted a redemption request yet.</p>
       )}
     </Panel>
   );

@@ -6,7 +6,7 @@ export async function GET(request: NextRequest) {
   if (context instanceof NextResponse) return context;
 
   const { db } = context;
-  const [userCount, bannedCount, reportCount, openCount, users, reports, feedbackCount, openFeedbackCount, feedback, referrals, earningsProfiles, withdrawals] = await Promise.all([
+  const [userCount, bannedCount, reportCount, openCount, users, reports, feedbackCount, openFeedbackCount, feedback, referrals, earningsProfiles, withdrawals, complaints] = await Promise.all([
     db.from("profiles").select("id", { count: "exact", head: true }),
     db.from("profiles").select("id", { count: "exact", head: true }).eq("is_banned", true),
     db.from("reports").select("id", { count: "exact", head: true }),
@@ -18,7 +18,8 @@ export async function GET(request: NextRequest) {
     db.from("feedback").select("id, user_id, email, kind, message, page_url, status, admin_note, created_at, updated_at").order("created_at", { ascending: false }).limit(100),
     db.from("referrals").select("id, referrer_id, referred_id, referral_code, status, reward_coins, created_at, qualified_at", { count: "exact" }).order("created_at", { ascending: false }).limit(100),
     db.from("profiles").select("total_earned").limit(10000),
-    db.from("withdrawal_requests").select("id, user_id, amount_coins, amount_usd, method, destination, status, admin_note, created_at").order("created_at", { ascending: false }).limit(100),
+    db.from("withdrawal_requests").select("id, user_id, amount_coins, method, destination, status, admin_note, created_at").order("created_at", { ascending: false }).limit(100),
+    db.from("withdrawal_complaints").select("id, withdrawal_id, user_id, subject, message, status, admin_reply, created_at, updated_at").order("created_at", { ascending: false }).limit(100),
   ]);
 
   const failure = [users, reports, referrals].find((result) => result.error);
@@ -47,5 +48,6 @@ export async function GET(request: NextRequest) {
     feedback: feedback.error ? [] : feedback.data ?? [],
     referrals: referrals.data ?? [],
     withdrawals: withdrawals.data ?? [],
+    complaints: complaints.error ? [] : complaints.data ?? [],
   });
 }

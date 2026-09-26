@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { useAdmin } from "@/lib/admin-store";
+import { useAdmin, type DashboardData } from "@/lib/admin-store";
 import { Coins, Users } from "@/components/icons";
 import {
   Badge,
@@ -12,7 +12,6 @@ import {
   Table,
   formatCoins,
   formatDate,
-  formatDollars,
   initial,
 } from "@/components/ui";
 
@@ -21,6 +20,13 @@ const WITHDRAWAL_TONE = {
   approved: "positive",
   pending: "caution",
   rejected: "critical",
+} as const;
+
+const COMPLAINT_TONE = {
+  open: "critical",
+  in_review: "caution",
+  resolved: "positive",
+  rejected: "neutral",
 } as const;
 
 export default function EarningsPage() {
@@ -36,7 +42,7 @@ export default function EarningsPage() {
         <Kpi
           label="Coins issued"
           value={formatCoins(data.counts.coinsIssued)}
-          hint={`${formatDollars(data.counts.coinsIssued)} of lifetime reward value`}
+          hint="100 coins = 1 dollar"
           icon={<Coins />}
         />
         <Kpi
@@ -52,7 +58,7 @@ export default function EarningsPage() {
       <Panel>
         <PanelHead
           title="Referral earnings"
-          description="Every qualified referral creates a one-time 100 coin reward ($1.00)."
+          description="Every qualified referral creates a one-time 100 coin reward."
           action={<span className="muted">{data.referrals.length} shown</span>}
         />
         <Table head={["Referrer", "Referred user", "Reward", "Status", "Created"]}>
@@ -73,7 +79,7 @@ export default function EarningsPage() {
               </td>
               <td>{usersById.get(referral.referred_id)?.email || referral.referred_id.slice(0, 8)}</td>
               <td className="mono">
-                {formatCoins(referral.reward_coins)} coins · {formatDollars(referral.reward_coins)}
+                {formatCoins(referral.reward_coins)} coins
               </td>
               <td>
                 <Badge tone={referral.status === "qualified" ? "positive" : "neutral"}>
@@ -100,10 +106,10 @@ export default function EarningsPage() {
               </td>
               <td className="mono">{user.referral_code || "—"}</td>
               <td className="mono">
-                {formatCoins(user.coin_balance)} coins · {formatDollars(user.coin_balance)}
+                {formatCoins(user.coin_balance)} coins
               </td>
               <td className="mono">
-                {formatCoins(user.total_earned)} coins · {formatDollars(user.total_earned)}
+                {formatCoins(user.total_earned)} coins
               </td>
             </tr>
           ))}
@@ -117,18 +123,21 @@ export default function EarningsPage() {
           description="Review gift-card and cash-pending requests."
           action={<span className="muted">{data.withdrawals.length} total</span>}
         />
-        <Table head={["User", "Amount", "Method", "Destination", "Status", "Action"]}>
+        <Table head={["Request ID", "User", "Amount", "Method", "Destination", "Status", "Action"]}>
           {data.withdrawals.map((withdrawal) => {
             const open = withdrawal.status === "pending" || withdrawal.status === "approved";
             const decide = (status: string) =>
               void patch(`/api/admin/withdrawals/${withdrawal.id}`, { status });
             return (
               <tr key={withdrawal.id}>
+                <td className="mono" title={withdrawal.id}>
+                  {withdrawal.id.slice(0, 8)}
+                </td>
                 <td className="mono">
                   {usersById.get(withdrawal.user_id)?.email || withdrawal.user_id.slice(0, 8)}
                 </td>
                 <td className="mono">
-                  {formatCoins(withdrawal.amount_coins)} coins · ${Number(withdrawal.amount_usd).toFixed(2)}
+                  {formatCoins(withdrawal.amount_coins)} coins
                 </td>
                 <td>{withdrawal.method === "gift_card" ? "Omegley gift card" : "Cash pending"}</td>
                 <td>{withdrawal.destination}</td>
@@ -180,10 +189,91 @@ export default function EarningsPage() {
               </tr>
             );
           })}
-          {!data.withdrawals.length && <EmptyRow colSpan={6} text="No withdrawal requests yet." />}
+          {!data.withdrawals.length && <EmptyRow colSpan={7} text="No withdrawal requests yet." />}
         </Table>
       </Panel>
+
+      <ComplaintQueue />
     </>
+  );
+}
+
+function ComplaintQueue() {
+  const { data, busy, patch } = useAdmin();
+
+  return (
+    <Panel>
+      <PanelHead
+        title="Withdrawal complaints"
+        description="Review user complaints and reply against the original request ID."
+        action={<span className="muted">{data.complaints.length} total</span>}
+      />
+      <Table head={["Complaint ID", "Request ID", "User", "Issue", "Status", "Action"]}>
+        {data.complaints.map((complaint) => (
+          <ComplaintRow key={complaint.id} complaint={complaint} busy={busy} patch={patch} />
+        ))}
+        {!data.complaints.length && <EmptyRow colSpan={6} text="No withdrawal complaints yet." />}
+      </Table>
+    </Panel>
+  );
+}
+
+function ComplaintRow({
+  complaint,
+  busy,
+  patch,
+}: {
+  complaint: DashboardData["complaints"][number];
+  busy: boolean;
+  patch: (path: string, body: Record<string, unknown>) => Promise<boolean>;
+}) {
+  const [reply, setReply] = useState(complaint.admin_reply ?? "");
+  const decide = (status: string) =>
+    void patch(`/api/admin/withdrawal-complaints/${complaint.id}`, { status, admin_reply: reply });
+
+  return (
+    <tr>
+      <td className="mono" title={complaint.id}>{complaint.id.slice(0, 8)}</td>
+      <td className="mono" title={complaint.withdrawal_id}>{complaint.withdrawal_id.slice(0, 8)}</td>
+      <td className="mono">{complaint.user_id.slice(0, 8)}</td>
+      <td className="complaint-cell">
+        <strong>{complaint.subject}</strong>
+        <span>{complaint.message}</span>
+        <textarea
+          className="input complaint-reply"
+          aria-label={`Reply to ${complaint.id}`}
+          placeholder="Optional reply to the user"
+          maxLength={2000}
+          value={reply}
+          onChange={(event) => setReply(event.target.value)}
+        />
+      </td>
+      <td>
+        <Badge tone={COMPLAINT_TONE[complaint.status as keyof typeof COMPLAINT_TONE] ?? "neutral"}>
+          {complaint.status.replace("_", " ")}
+        </Badge>
+      </td>
+      <td>
+        <div className="row-actions">
+          {complaint.status === "open" && (
+            <button type="button" className="btn btn--outline btn--sm" disabled={busy} onClick={() => decide("in_review")}>
+              Review
+            </button>
+          )}
+          {(complaint.status === "open" || complaint.status === "in_review") && (
+            <>
+              <button type="button" className="btn btn--primary btn--sm" disabled={busy} onClick={() => decide("resolved")}>
+                Resolve
+              </button>
+              <button type="button" className="btn btn--danger btn--sm" disabled={busy} onClick={() => decide("rejected")}>
+                Reject
+              </button>
+            </>
+          )}
+          {(complaint.status === "resolved" || complaint.status === "rejected") && "—"}
+        </div>
+      </td>
+    </tr>
   );
 }
 
@@ -253,7 +343,7 @@ function CreditForm() {
             value={amount}
             onChange={(event) => setAmount(event.target.value)}
           />
-          <span className="field-hint">{formatDollars(Number(amount) || 0)} of reward value</span>
+          <span className="field-hint">100 coins = 1 dollar</span>
         </div>
         <div className="field">
           <label htmlFor="credit-reason">Reason</label>

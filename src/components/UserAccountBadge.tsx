@@ -91,10 +91,10 @@ export default function UserAccountBadge({ compact = false }: { compact?: boolea
     <div className="inline-flex items-center gap-1.5">
       <Link
         href="/wallet"
-        title="View your wallet"
+        title="100 coins = 1 dollar. Open your wallet."
+        aria-label={`${account.availableCoins.toLocaleString()} coins. 100 coins = 1 dollar. Open your wallet.`}
         className="inline-flex items-center gap-1.5 rounded-full border border-positive/25 bg-positive/10 px-2.5 py-1.5 text-2xs font-semibold text-positive transition hover:border-positive/50 hover:bg-positive/20"
       >
-        <span aria-hidden="true">$</span>
         {account.availableCoins.toLocaleString()}
         <span className="hidden sm:inline">coins</span>
       </Link>

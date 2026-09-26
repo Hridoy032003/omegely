@@ -71,12 +71,22 @@ export type DashboardData = {
     id: string;
     user_id: string;
     amount_coins: number;
-    amount_usd: number;
     method: string;
     destination: string;
     status: string;
     admin_note: string | null;
     created_at: string;
+  }>;
+  complaints: Array<{
+    id: string;
+    withdrawal_id: string;
+    user_id: string;
+    subject: string;
+    message: string;
+    status: string;
+    admin_reply: string | null;
+    created_at: string;
+    updated_at: string;
   }>;
 };
 
@@ -96,6 +106,7 @@ export const EMPTY_DATA: DashboardData = {
   feedback: [],
   referrals: [],
   withdrawals: [],
+  complaints: [],
 };
 
 export type AdminState = {
