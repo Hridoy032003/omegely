@@ -81,12 +81,12 @@ export default function AccountPanel() {
       .select("display_name, avatar_url, bio, interests, profile_visibility, referral_code, coin_balance, total_earned")
       .eq("id", currentUser.id)
       .maybeSingle();
-    const nextProfile = {
+    const nextProfile: Profile = {
       ...EMPTY_PROFILE,
       ...(data ?? {}),
       display_name: data?.display_name || google.name,
       avatar_url: google.avatar || data?.avatar_url || "",
-      profile_visibility: data?.profile_visibility === "public" ? "public" : "private",
+      profile_visibility: data?.profile_visibility === "public" ? "public" as const : "private" as const,
     };
     setProfile(nextProfile);
     const { data: transactionData } = await supabase.from("coin_transactions").select("id, amount, description, created_at").eq("user_id", currentUser.id).order("created_at", { ascending: false }).limit(5);
