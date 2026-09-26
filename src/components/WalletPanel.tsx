@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase-browser";
+import { COIN_PACKS, formatInr, type CoinPack } from "@/lib/coin-packs";
 import { ArrowRight } from "@/components/icons";
 import { LogoMark } from "@/components/logo";
 import {
@@ -48,6 +49,20 @@ type WithdrawalComplaint = {
   admin_reply: string | null;
   created_at: string;
 };
+
+type RazorpayCheckoutResponse = {
+  razorpay_payment_id: string;
+  razorpay_order_id: string;
+  razorpay_signature: string;
+};
+
+type RazorpayCheckout = { open: () => void };
+
+declare global {
+  interface Window {
+    Razorpay?: new (options: Record<string, unknown>) => RazorpayCheckout;
+  }
+}
 
 const DEFAULT_WITHDRAWAL_MINIMUM = 5000;
 const DEFAULT_CONNECTION_REWARD = 10;
@@ -148,7 +163,7 @@ export default function WalletPanel() {
   const [transactions, setTransactions] = useState<CoinTransaction[]>([]);
   const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([]);
   const [complaints, setComplaints] = useState<WithdrawalComplaint[]>([]);
-  const [activeTab, setActiveTab] = useState<"earn" | "redeem">("earn");
+  const [activeTab, setActiveTab] = useState<"earn" | "buy" | "redeem">("earn");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
@@ -159,6 +174,7 @@ export default function WalletPanel() {
   const [connectionReward, setConnectionReward] = useState(DEFAULT_CONNECTION_REWARD);
   const [referralReward, setReferralReward] = useState(DEFAULT_REFERRAL_REWARD);
   const [referralQualificationDays, setReferralQualificationDays] = useState(DEFAULT_REFERRAL_DAYS);
+  const [purchaseBusy, setPurchaseBusy] = useState<string | null>(null);
   const [withdrawalMethod, setWithdrawalMethod] = useState<"gift_card" | "cash_pending">("gift_card");
   const [withdrawalDestination, setWithdrawalDestination] = useState("");
   const [complaintWithdrawalId, setComplaintWithdrawalId] = useState<string | null>(null);
@@ -297,6 +313,81 @@ export default function WalletPanel() {
       window.setTimeout(() => setCopied(false), 2200);
     } catch {
       setNotice({ tone: "error", text: "Could not copy automatically. Select the link and copy it manually." });
+    }
+  };
+
+  const loadRazorpay = () => new Promise<void>((resolve, reject) => {
+    if (window.Razorpay) return resolve();
+    const existing = document.querySelector<HTMLScriptElement>('script[src="https://checkout.razorpay.com/v1/checkout.js"]');
+    if (existing) {
+      existing.addEventListener("load", () => resolve(), { once: true });
+      existing.addEventListener("error", () => reject(new Error("Razorpay checkout could not load.")), { once: true });
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Razorpay checkout could not load."));
+    document.body.appendChild(script);
+  });
+
+  const purchaseCoins = async (pack: CoinPack) => {
+    if (!user || purchaseBusy) return;
+    setPurchaseBusy(pack.id);
+    setNotice(null);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const orderResponse = await fetch("/api/payments/razorpay/order", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${sessionData.session?.access_token || ""}`,
+        },
+        body: JSON.stringify({ pack_id: pack.id }),
+      });
+      const order = (await orderResponse.json().catch(() => ({}))) as { error?: string; order_id?: string; amount?: number; currency?: string; key_id?: string; coins?: number };
+      if (!orderResponse.ok || !order.order_id || !order.key_id) throw new Error(order.error || "Could not start the payment.");
+      await loadRazorpay();
+      if (!window.Razorpay) throw new Error("Razorpay checkout is unavailable.");
+
+      const checkout = new window.Razorpay({
+        key: order.key_id,
+        amount: order.amount,
+        currency: order.currency,
+        name: "Omegley",
+        description: `${formatCoins(order.coins || pack.coins)} coins`,
+        order_id: order.order_id,
+        prefill: { email: user.email || "" },
+        theme: { color: "#6366f1" },
+        handler: async (response: RazorpayCheckoutResponse) => {
+          try {
+            const { data: session } = await supabase.auth.getSession();
+            const verifyResponse = await fetch("/api/payments/razorpay/verify", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${session.session?.access_token || ""}`,
+              },
+              body: JSON.stringify(response),
+            });
+            const result = (await verifyResponse.json().catch(() => ({}))) as { error?: string };
+            if (!verifyResponse.ok) throw new Error(result.error || "Payment verification failed.");
+            setNotice({ tone: "success", text: `${formatCoins(pack.coins)} coins were added to your wallet.` });
+            await loadWallet(user);
+            setActiveTab("earn");
+          } catch (error) {
+            setNotice({ tone: "error", text: error instanceof Error ? error.message : "Payment verification failed. The payment will be reconciled by webhook." });
+          } finally {
+            setPurchaseBusy(null);
+          }
+        },
+        modal: { ondismiss: () => setPurchaseBusy(null) },
+      });
+      checkout.open();
+    } catch (error) {
+      setPurchaseBusy(null);
+      setNotice({ tone: "error", text: error instanceof Error ? error.message : "Could not start the payment." });
     }
   };
 
@@ -480,11 +571,12 @@ export default function WalletPanel() {
         <div
           role="tablist"
           aria-label="Wallet actions"
-          className="mt-8 grid w-full max-w-lg grid-cols-2 gap-1 rounded-card border border-line bg-white/[0.02] p-1"
+          className="mt-8 grid w-full max-w-2xl grid-cols-3 gap-1 rounded-card border border-line bg-white/[0.02] p-1"
         >
           {(
             [
-              { id: "earn", title: "Add coins", sub: "Earn through Omegley" },
+              { id: "earn", title: "Earn coins", sub: "Earn through Omegley" },
+              { id: "buy", title: "Buy coins", sub: "Razorpay checkout" },
               { id: "redeem", title: "Redeem", sub: "Request a payout" },
             ] as const
           ).map((tab) => (
@@ -508,7 +600,9 @@ export default function WalletPanel() {
         </div>
 
         <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(300px,1fr)]" role="tabpanel">
-          {activeTab === "earn" ? (
+          {activeTab === "buy" ? (
+            <BuyCoinsPanel busy={purchaseBusy} onPurchase={(pack) => void purchaseCoins(pack)} />
+          ) : activeTab === "earn" ? (
             <>
               <Panel className="p-6 sm:p-7">
                 <PanelHead
@@ -771,6 +865,34 @@ function EarnRow({
       </div>
       <span className="shrink-0 text-sm font-semibold whitespace-nowrap text-positive">{reward}</span>
     </article>
+  );
+}
+
+function BuyCoinsPanel({ busy, onPurchase }: { busy: string | null; onPurchase: (pack: CoinPack) => void }) {
+  return (
+    <Panel className="p-6 sm:p-7 lg:col-span-2">
+      <PanelHead
+        label="Buy coins"
+        title="Add coins to your wallet"
+        description="Choose a pack and pay securely with Razorpay. Coins are credited only after server verification."
+      />
+      <div className="mt-6 grid gap-4 md:grid-cols-3">
+        {COIN_PACKS.map((pack) => (
+          <article key={pack.id} className={`relative rounded-card border p-5 ${pack.badge ? "border-brand/60 bg-brand-soft/10" : "border-line bg-white/[0.02]"}`}>
+            {pack.badge && <span className="absolute right-3 top-3"><Badge tone="brand">{pack.badge}</Badge></span>}
+            <p className="text-sm font-semibold text-ink">{pack.name}</p>
+            <p className="mt-5 font-display text-3xl font-semibold tracking-tight text-ink">{formatCoins(pack.coins)}</p>
+            <p className="text-sm text-brand-ink">coins</p>
+            <p className="mt-3 min-h-10 text-sm leading-relaxed text-ink-3">{pack.description}</p>
+            <p className="mt-5 text-lg font-semibold text-ink">{formatInr(pack.amountPaise)}</p>
+            <button type="button" disabled={busy !== null} onClick={() => onPurchase(pack)} className={`${buttonClass({ variant: "brand", size: "sm", block: true })} mt-4`}>
+              {busy === pack.id ? "Opening checkout…" : "Buy securely"}
+            </button>
+          </article>
+        ))}
+      </div>
+      <p className="mt-6 text-xs leading-relaxed text-ink-4">Razorpay payments are processed in INR. Omegley coins remain the wallet unit, and 100 coins = 1 dollar for reward-value display.</p>
+    </Panel>
   );
 }
 
