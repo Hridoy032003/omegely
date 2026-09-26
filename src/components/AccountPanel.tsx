@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
-import { supabase } from "@/lib/supabase-browser";
+import { isSupabaseConfigured, supabase } from "@/lib/supabase-browser";
 import { ArrowRight, Check } from "@/components/icons";
 import {
   AppHeader,
@@ -60,6 +60,25 @@ function googleDetails(user: User) {
         ? metadata.picture
         : "";
   return { name, avatar };
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number) {
+  return new Promise<T>((resolve, reject) => {
+    const timeout = window.setTimeout(
+      () => reject(new Error("Authentication is taking too long. Check your connection and try again.")),
+      timeoutMs,
+    );
+    promise.then(
+      (value) => {
+        window.clearTimeout(timeout);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timeout);
+        reject(error);
+      },
+    );
+  });
 }
 
 function GoogleMark() {
@@ -163,29 +182,40 @@ export default function AccountPanel() {
 
   const authenticate = async (event: FormEvent) => {
     event.preventDefault();
+    if (!isSupabaseConfigured) {
+      setFeedback({ tone: "error", text: "Account access is not configured on this deployment. Add the public Supabase URL and publishable key, then redeploy." });
+      return;
+    }
     setBusy(true);
     setFeedback(null);
-    const result =
-      mode === "login"
-        ? await supabase.auth.signInWithPassword({ email, password })
-        : await supabase.auth.signUp({
-            email,
-            password,
-            options: { emailRedirectTo: `${window.location.origin}/account` },
-          });
+    try {
+      const result = await withTimeout(
+        mode === "login"
+          ? supabase.auth.signInWithPassword({ email, password })
+          : supabase.auth.signUp({
+              email,
+              password,
+              options: { emailRedirectTo: `${window.location.origin}/account` },
+            }),
+        15000,
+      );
 
-    if (result.error) {
-      setFeedback({ tone: "error", text: result.error.message });
-    } else {
-      setFeedback({
-        tone: "success",
-        text:
-          mode === "signup"
-            ? "Account created. Check your email if confirmation is enabled."
-            : "Signed in.",
-      });
+      if (result.error) {
+        setFeedback({ tone: "error", text: result.error.message });
+      } else {
+        setFeedback({
+          tone: "success",
+          text:
+            mode === "signup"
+              ? "Account created. Check your email if confirmation is enabled."
+              : "Signed in.",
+        });
+      }
+    } catch (error) {
+      setFeedback({ tone: "error", text: error instanceof Error ? error.message : "Could not reach the account service. Try again." });
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
   };
 
   const signInWithGoogle = async () => {
