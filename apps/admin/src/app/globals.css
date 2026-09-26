@@ -137,6 +137,10 @@ td small { max-width: 310px; overflow: hidden; margin-top: 5px; color: var(--sub
 .tiny, select { border: 1px solid #353a48; border-radius: 7px; background: #1a1d26; color: #e5e7eb; padding: 7px 10px; font-size: 11px; }
 .tiny:hover, select:hover { border-color: #5a6070; }
 .tiny.danger { border-color: rgba(255,118,118,.28); background: rgba(255,118,118,.08); color: #ffaaaa; }
+.withdrawal-actions { display: flex; flex-wrap: wrap; gap: 5px; }
+.admin-credit-panel { margin-top: 14px; }
+.admin-credit-form { display: grid; grid-template-columns: 1.2fr .5fr 1.4fr auto auto; align-items: center; gap: 8px; padding: 16px 21px; }
+.admin-credit-form input, .admin-credit-form select { min-width: 0; border: 1px solid #353a48; border-radius: 7px; background: #1a1d26; color: #e5e7eb; padding: 9px 10px; font-size: 12px; }
 .empty-table { height: 145px; color: var(--subtle); text-align: center; }
 .empty-state { display: grid; place-items: center; padding: 38px 20px; text-align: center; }
 .empty-state-icon { display: grid; width: 35px; height: 35px; place-items: center; border-radius: 11px; background: rgba(124,108,255,.1); color: #a69cff; font-size: 20px; }
@@ -192,3 +196,4 @@ td small { color: #858d9d; font-size: 11px; }
 @media (max-width: 1000px) { .admin-sidebar { width: 218px; flex-basis: 218px; } .admin-topbar, .admin-content { padding-right: 26px; padding-left: 26px; } .dashboard-grid { grid-template-columns: 1fr; } }
 @media (max-width: 720px) { .admin-sidebar { width: 61px; flex-basis: 61px; align-items: center; padding: 19px 8px; } .admin-brand > span:last-child, .workspace-label, .sidebar-link > span:not(.sidebar-icon), .sidebar-link em, .system-status, .sidebar-signout span { display: none; } .sidebar-nav { width: 100%; margin-top: 45px; } .sidebar-link { justify-content: center; padding: 12px 0; } .sidebar-link.active { box-shadow: inset 3px 0 0 var(--purple); } .sidebar-icon { font-size: 18px; } .sidebar-bottom { width: 100%; padding: 15px 0 0; } .sidebar-signout { justify-content: center; } .admin-topbar { min-height: 64px; padding: 0 16px; } .mobile-brand { display: grid; } .admin-identity > span:last-child { display: none; } .admin-identity { border-left: 0; padding-left: 4px; } .admin-content { padding: 28px 16px 48px; } .page-heading { align-items: start; flex-direction: column; margin-bottom: 24px; } .heading-actions { width: 100%; justify-content: space-between; } .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; } .kpi-card { min-height: 122px; padding: 14px; } .kpi-card strong { margin-top: 12px; font-size: 26px; } .quick-grid { grid-template-columns: 1fr; } .panel-heading { padding: 16px; } .activity-list { padding-right: 16px; padding-left: 16px; } }
 @media (max-width: 430px) { .last-updated { display: none; } .kpi-top span:first-child { max-width: 80px; } .kpi-card small { font-size: 10px; } .login-card { padding: 26px 21px; } .login-card .admin-brand { margin-bottom: 45px; } }
+@media (max-width: 720px) { .admin-credit-form { grid-template-columns: 1fr; padding: 16px; } }

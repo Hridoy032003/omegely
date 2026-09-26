@@ -14,10 +14,12 @@ import type { InboundMessage, RealtimeChannel } from "ably";
 import {
   MSG,
   type MatchPayload,
+  type PublicProfile,
   type RejectPayload,
   type SignalData,
   type SignalPayload,
 } from "@/types/signaling";
+import { supabase } from "@/lib/supabase-browser";
 
 /**
  * Public STUN servers cover most home/office NATs. For symmetric NATs and some
@@ -59,6 +61,23 @@ function withTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
   });
 }
 
+function sanitizePublicProfile(value: unknown): PublicProfile | null {
+  if (!value || typeof value !== "object") return null;
+  const profile = value as Record<string, unknown>;
+  const interests = Array.isArray(profile.interests)
+    ? profile.interests
+        .filter((item): item is string => typeof item === "string")
+        .slice(0, 8)
+        .map((item) => item.slice(0, 40))
+    : [];
+  return {
+    display_name: typeof profile.display_name === "string" ? profile.display_name.slice(0, 80) : "",
+    avatar_url: typeof profile.avatar_url === "string" ? profile.avatar_url.slice(0, 500) : "",
+    bio: typeof profile.bio === "string" ? profile.bio.slice(0, 240) : "",
+    interests,
+  };
+}
+
 export type Status = "idle" | "searching" | "connected";
 
 export interface ChatMessage {
@@ -82,6 +101,7 @@ export function useWebRTC() {
   const [status, setStatus] = useState<Status>("idle");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [partnerCountry, setPartnerCountry] = useState<string | null>(null);
+  const [partnerProfile, setPartnerProfile] = useState<PublicProfile | null>(null);
   const [onlineCount, setOnlineCount] = useState(0);
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [micOn, setMicOn] = useState(true);
@@ -104,10 +124,12 @@ export function useWebRTC() {
 
   const partnerRef = useRef<string | null>(null); // committed partner clientId
   const partnerCountryRef = useRef<string>("XX");
+  const publicProfileRef = useRef<PublicProfile | null>(null);
   const pendingReqRef = useRef<{ to: string; timer: ReturnType<typeof setTimeout> } | null>(null);
   const cooldownRef = useRef<Map<string, number>>(new Map()); // partnerId -> left-at ms
   const helloTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startInFlightRef = useRef(false);
+  const connectionEventRef = useRef<string | null>(null);
 
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -122,6 +144,27 @@ export function useWebRTC() {
       ...prev,
       { id: crypto.randomUUID(), from, text, ts: Date.now() },
     ]);
+  }, []);
+
+  const rewardCompletedConnection = useCallback(() => {
+    const eventKey = connectionEventRef.current;
+    if (!eventKey) return;
+    connectionEventRef.current = null;
+    void (async () => {
+      try {
+        const { data: auth } = await supabase.auth.getUser();
+        if (auth.user) {
+          await supabase.rpc("reward_authenticated_connection", { p_event_key: eventKey });
+        } else {
+          let walletId = window.localStorage.getItem("omegley_anonymous_wallet");
+          if (!walletId) {
+            walletId = crypto.randomUUID();
+            window.localStorage.setItem("omegley_anonymous_wallet", walletId);
+          }
+          await supabase.rpc("reward_anonymous_connection", { p_wallet_id: walletId, p_event_key: eventKey });
+        }
+      }
+    })();
   }, []);
 
   /** Publish a message to another client's private inbox channel. */
@@ -254,13 +297,47 @@ export function useWebRTC() {
     });
   }, []);
 
+  const loadPublicProfile = useCallback(async () => {
+    publicProfileRef.current = null;
+    const { data: auth } = await supabase.auth.getUser();
+    if (!auth.user) return;
+
+    const metadata = auth.user.user_metadata ?? {};
+    const fallbackName = typeof metadata.full_name === "string"
+      ? metadata.full_name
+      : typeof metadata.name === "string"
+        ? metadata.name
+        : "";
+    const fallbackAvatar = typeof metadata.avatar_url === "string"
+      ? metadata.avatar_url
+      : typeof metadata.picture === "string"
+        ? metadata.picture
+        : "";
+    const { data } = await supabase
+      .from("profiles")
+      .select("display_name, avatar_url, bio, interests, profile_visibility")
+      .eq("id", auth.user.id)
+      .maybeSingle();
+
+    if (data?.profile_visibility !== "public") return;
+
+    publicProfileRef.current = {
+      display_name: typeof data.display_name === "string" ? data.display_name.slice(0, 80) : fallbackName.slice(0, 80),
+      avatar_url: typeof data.avatar_url === "string" ? data.avatar_url.slice(0, 500) : fallbackAvatar.slice(0, 500),
+      bio: typeof data.bio === "string" ? data.bio.slice(0, 240) : "",
+      interests: Array.isArray(data.interests)
+        ? data.interests.filter((item): item is string => typeof item === "string").slice(0, 8).map((item) => item.slice(0, 40))
+        : [],
+    };
+  }, []);
+
   /**
    * Lock in a pairing. Guarded so a peer can only commit once. Initiator is
    * chosen deterministically by clientId comparison, which breaks the symmetric
    * "we both requested each other at once" race without any server arbitration.
    */
   const commit = useCallback(
-    async (partnerId: string, country: string) => {
+    async (partnerId: string, country: string, profile?: PublicProfile | null) => {
       if (partnerRef.current) return; // already paired
       partnerRef.current = partnerId;
       partnerCountryRef.current = country;
@@ -269,6 +346,8 @@ export function useWebRTC() {
 
       setMessages([]);
       setPartnerCountry(country);
+      setPartnerProfile(sanitizePublicProfile(profile));
+      connectionEventRef.current = crypto.randomUUID();
       setStatusBoth("connected");
 
       const initiator = myIdRef.current < partnerId;
@@ -296,7 +375,10 @@ export function useWebRTC() {
         to: fromId,
         timer: setTimeout(() => clearPending(), REQUEST_TIMEOUT_MS),
       };
-      sendTo(fromId, MSG.REQUEST, { country: myCountryRef.current });
+      sendTo(fromId, MSG.REQUEST, {
+        country: myCountryRef.current,
+        profile: publicProfileRef.current,
+      });
       void country; // partner country is confirmed via the ACCEPT payload
     },
     [clearPending, sendTo],
@@ -323,6 +405,7 @@ export function useWebRTC() {
   const beginSearch = useCallback(() => {
     partnerRef.current = null;
     setPartnerCountry(null);
+    setPartnerProfile(null);
     setStatusBoth("searching");
     clearPending();
 
@@ -333,33 +416,34 @@ export function useWebRTC() {
   }, [announceHello, clearPending, scanLobby, setStatusBoth, stopHello]);
 
   const onPartnerLeft = useCallback(() => {
+    rewardCompletedConnection();
     if (partnerRef.current) cooldownRef.current.set(partnerRef.current, Date.now());
     teardownPeer();
     partnerRef.current = null;
     beginSearch();
-  }, [beginSearch, teardownPeer]);
+  }, [beginSearch, rewardCompletedConnection, teardownPeer]);
 
   /** Route an inbound message on our private inbox channel. */
   const handleInbox = useCallback(
     (msg: InboundMessage) => {
       switch (msg.name) {
         case MSG.REQUEST: {
-          const { from, country } = msg.data as MatchPayload;
+          const { from, country, profile } = msg.data as MatchPayload;
           if (partnerRef.current || statusRef.current !== "searching") {
             sendTo(from, MSG.REJECT, {});
           } else {
-            void commit(from, country);
-            sendTo(from, MSG.ACCEPT, { country: myCountryRef.current });
+            void commit(from, country, profile);
+            sendTo(from, MSG.ACCEPT, { country: myCountryRef.current, profile: publicProfileRef.current });
           }
           break;
         }
         case MSG.ACCEPT: {
-          const { from, country } = msg.data as MatchPayload;
+          const { from, country, profile } = msg.data as MatchPayload;
           if (partnerRef.current === from) break; // mutual request — already paired
           if (partnerRef.current) {
             sendTo(from, MSG.REJECT, {}); // we committed elsewhere first
           } else if (pendingReqRef.current?.to === from) {
-            void commit(from, country);
+            void commit(from, country, profile);
           }
           break;
         }
@@ -435,6 +519,14 @@ export function useWebRTC() {
         myCountryRef.current = (await res.json()).country ?? "XX";
       } catch {
         myCountryRef.current = "XX";
+      }
+
+      // Load the current privacy setting immediately before matching. A
+      // private profile is represented by null and is never sent to the peer.
+      try {
+        await loadPublicProfile();
+      } catch {
+        publicProfileRef.current = null;
       }
 
       // 3) Connect to Ably with a self-minted clientId + token auth.
@@ -567,9 +659,10 @@ export function useWebRTC() {
       startInFlightRef.current = false;
       setStarting(false);
     }
-  }, [beginSearch, clearPending, handleInbox, maybeRequest, refreshOnline, scanLobby, setStatusBoth, stopHello, teardownPeer]);
+  }, [beginSearch, clearPending, handleInbox, loadPublicProfile, maybeRequest, refreshOnline, scanLobby, setStatusBoth, stopHello, teardownPeer]);
 
   const next = useCallback(() => {
+    rewardCompletedConnection();
     if (partnerRef.current) {
       sendTo(partnerRef.current, MSG.BYE, {});
       cooldownRef.current.set(partnerRef.current, Date.now());
@@ -578,9 +671,10 @@ export function useWebRTC() {
     partnerRef.current = null;
     setMessages([]);
     beginSearch();
-  }, [beginSearch, sendTo, teardownPeer]);
+  }, [beginSearch, rewardCompletedConnection, sendTo, teardownPeer]);
 
   const stop = useCallback(() => {
+    rewardCompletedConnection();
     if (partnerRef.current) sendTo(partnerRef.current, MSG.BYE, {});
     stopHello();
     clearPending();
@@ -604,9 +698,10 @@ export function useWebRTC() {
 
     setMessages([]);
     setPartnerCountry(null);
+    setPartnerProfile(null);
     setOnlineCount(0);
     setStatusBoth("idle");
-  }, [clearPending, sendTo, setStatusBoth, stopHello, teardownPeer]);
+  }, [clearPending, rewardCompletedConnection, sendTo, setStatusBoth, stopHello, teardownPeer]);
 
   const sendMessage = useCallback(
     (text: string) => {
@@ -646,15 +741,17 @@ export function useWebRTC() {
         void lobbyRef.current.presence.leave().catch(() => {});
       }
       teardownPeer();
+      rewardCompletedConnection();
       localStreamRef.current?.getTracks().forEach((t) => t.stop());
       clientRef.current?.close();
     };
-  }, [clearPending, stopHello, teardownPeer]);
+  }, [clearPending, rewardCompletedConnection, stopHello, teardownPeer]);
 
   return {
     status,
     messages,
     partnerCountry,
+    partnerProfile,
     onlineCount,
     mediaError,
     starting,
