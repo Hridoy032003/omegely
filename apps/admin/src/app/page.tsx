@@ -33,6 +33,16 @@ const NAV_ITEMS: Array<{ id: Section; label: string; icon: string }> = [
 
 type UpdateAction = (path: string, body: Record<string, unknown>) => Promise<void>;
 
+async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = 12000) {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
 export default function AdminPage({ initialSection = "dashboard" }: { initialSection?: Section }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -45,7 +55,7 @@ export default function AdminPage({ initialSection = "dashboard" }: { initialSec
   const [busy, setBusy] = useState(false);
 
   const loadDashboard = useCallback(async (accessToken: string) => {
-    const response = await fetch("/api/admin/overview", {
+    const response = await fetchWithTimeout("/api/admin/overview", {
       headers: { Authorization: `Bearer ${accessToken}` },
       cache: "no-store",
     });
@@ -56,15 +66,15 @@ export default function AdminPage({ initialSection = "dashboard" }: { initialSec
   }, []);
 
   const verifyAdmin = useCallback(async (nextSession: Session) => {
-    const response = await fetch("/api/admin/session", {
+    const response = await fetchWithTimeout("/api/admin/session", {
       headers: { Authorization: `Bearer ${nextSession.access_token}` },
-    });
+    }, 10000);
     if (!response.ok) {
       await supabase.auth.signOut();
       throw new Error(response.status === 403 ? "This account is not an approved admin." : "Admin session expired.");
     }
     setSession(nextSession);
-    await loadDashboard(nextSession.access_token);
+    void loadDashboard(nextSession.access_token).catch((error: Error) => setMessage(error.message));
   }, [loadDashboard]);
 
   useEffect(() => {
