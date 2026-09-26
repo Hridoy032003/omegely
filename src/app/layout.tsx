@@ -1,21 +1,15 @@
 import type { Metadata } from "next";
-import { Inter, Sora } from "next/font/google";
+import { Roboto } from "next/font/google";
 import "./globals.css";
 import CookieConsent from "@/components/CookieConsent";
 import FeedbackWidget from "@/components/FeedbackWidget";
 import PostHogProvider from "@/components/PostHogProvider";
 import PwaInstallPrompt from "@/components/PwaInstallPrompt";
 
-const inter = Inter({
+const roboto = Roboto({
   subsets: ["latin"],
-  variable: "--font-sans",
-  display: "swap",
-});
-
-const sora = Sora({
-  subsets: ["latin"],
-  weight: ["600", "700", "800"],
-  variable: "--font-display",
+  weight: ["400", "500", "700"],
+  variable: "--font-roboto",
   display: "swap",
 });
 
@@ -76,7 +70,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${inter.variable} ${sora.variable}`}>
+    <html lang="en" className={roboto.variable}>
       <body>
         <PostHogProvider>{children}</PostHogProvider>
         <CookieConsent />
