@@ -65,10 +65,15 @@ export default function UserAccountBadge({ compact = false }: UserAccountBadgePr
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       void loadAccount(session?.user ?? null);
     });
+    const refreshOnFocus = () => {
+      void supabase.auth.getUser().then(({ data: current }) => void loadAccount(current.user));
+    };
+    window.addEventListener("focus", refreshOnFocus);
 
     return () => {
       mounted = false;
       data.subscription.unsubscribe();
+      window.removeEventListener("focus", refreshOnFocus);
     };
   }, []);
 
