@@ -70,7 +70,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={roboto.variable}>
+    <html lang="en" className={roboto.variable} data-scroll-behavior="smooth">
       <body>
         <PostHogProvider>{children}</PostHogProvider>
         <CookieConsent />

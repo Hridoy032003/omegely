@@ -1,7 +1,8 @@
 # Omegley 🎲
 
-Anonymous, **Omegle-style random 1:1 video, voice & text chat** built to run
-**100% serverless on Vercel**. No database, no signup, no history.
+Anonymous, **Omegle-style random 1:1 video, voice & text chat** with optional
+accounts, coin rewards, referrals, and admin-reviewed redemptions. The app is
+built to run serverlessly on Vercel with Ably, Supabase, and WebRTC.
 
 ## Architecture (serverless-first)
 
@@ -43,13 +44,16 @@ using Ably **presence** — there is no backend queue and no database.
 
 ## Setup
 
+Use Node.js 22 or newer and pnpm 9 or newer.
+
 1. **Get an Ably key** (free): https://ably.com → create an app → copy the API key.
-2. `cp .env.local.example .env.local` and paste your key into `ABLY_API_KEY`.
-3. Install & run:
+2. Create a Supabase project and apply the SQL files in `supabase/migrations` in numeric order.
+3. `cp .env.local.example .env.local` and add the Ably and public Supabase values.
+4. Install and run:
 
 ```bash
-npm install
-npm run dev
+pnpm install
+pnpm dev
 # open http://localhost:3000 in TWO browsers/tabs and click "Start" in both
 ```
 
@@ -63,8 +67,9 @@ vercel            # or push to a Git repo connected to Vercel
 ```
 
 Then in **Vercel → Project → Settings → Environment Variables** add
-`ABLY_API_KEY`. That's it — the two API routes deploy as serverless functions,
-the frontend as static/SSR, and Ably handles all the live connections.
+`ABLY_API_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, and
+`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`. The API routes deploy as serverless
+functions, the frontend as static/SSR, and Ably handles live coordination.
 
 ## Scaling & production notes
 

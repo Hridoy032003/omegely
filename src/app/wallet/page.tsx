@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import AccountPanel from "@/components/AccountPanel";
+import WalletPanel from "@/components/WalletPanel";
 
 export const metadata: Metadata = {
   title: "Wallet and earnings",
@@ -8,5 +8,5 @@ export const metadata: Metadata = {
 };
 
 export default function WalletPage() {
-  return <AccountPanel />;
+  return <WalletPanel />;
 }

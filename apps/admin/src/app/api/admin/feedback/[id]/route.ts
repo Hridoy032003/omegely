@@ -3,7 +3,8 @@ import { requireAdmin } from "../../../../../lib/admin-server";
 
 const STATUSES = new Set(["open", "reviewing", "resolved", "dismissed"]);
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const context = await requireAdmin(request);
   if (context instanceof NextResponse) return context;
 
@@ -15,7 +16,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   const { data, error } = await context.db
     .from("feedback")
     .update({ status: body.status, updated_at: new Date().toISOString() })
-    .eq("id", params.id)
+    .eq("id", id)
     .select("id, status, updated_at")
     .single();
 

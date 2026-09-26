@@ -17,8 +17,6 @@ type Profile = {
   total_earned: number;
   reserved_coins: number;
 };
-type CoinTransaction = { id: string; amount: number; description: string; created_at: string };
-
 const EMPTY_PROFILE: Profile = { display_name: "", avatar_url: "", bio: "", interests: [], profile_visibility: "private", referral_code: null, coin_balance: 0, total_earned: 0, reserved_coins: 0 };
 
 function googleDetails(user: User) {
@@ -56,11 +54,6 @@ export default function AccountPanel() {
   const [editing, setEditing] = useState(false);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
-  const [referralCopied, setReferralCopied] = useState(false);
-  const [transactions, setTransactions] = useState<CoinTransaction[]>([]);
-  const [withdrawalAmount, setWithdrawalAmount] = useState("5000");
-  const [withdrawalMethod, setWithdrawalMethod] = useState<"gift_card" | "cash_pending">("gift_card");
-  const [withdrawalDestination, setWithdrawalDestination] = useState("");
 
   useEffect(() => {
     const referralCode = new URLSearchParams(window.location.search).get("ref");
@@ -73,7 +66,7 @@ export default function AccountPanel() {
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
       if (session?.user) void loadProfile(session.user);
-      else { setProfile(EMPTY_PROFILE); setTransactions([]); }
+      else setProfile(EMPTY_PROFILE);
     });
     const refreshOnFocus = () => {
       void supabase.auth.getUser().then(({ data: current }) => {
@@ -110,9 +103,6 @@ export default function AccountPanel() {
     };
     setProfile(nextProfile);
     if (!data?.referral_code) void supabase.from("profiles").update({ referral_code: fallbackReferralCode }).eq("id", currentUser.id);
-    const { data: transactionData } = await supabase.from("coin_transactions").select("id, amount, description, created_at").eq("user_id", currentUser.id).order("created_at", { ascending: false }).limit(5);
-    setTransactions(transactionData ?? []);
-
     const referralCode = window.localStorage.getItem("omegley_referral_code");
     if (referralCode) {
       const { data: claimed } = await supabase.rpc("claim_referral", { p_referral_code: referralCode });
@@ -126,21 +116,6 @@ export default function AccountPanel() {
         updated_at: new Date().toISOString(),
       }).eq("id", currentUser.id);
     }
-  };
-
-  const requestWithdrawal = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!user) return;
-    setBusy(true);
-    setMessage("");
-    const amount = Number(withdrawalAmount);
-    const { data: requestId, error } = await supabase.rpc("request_withdrawal", { p_amount_coins: amount, p_method: withdrawalMethod, p_destination: withdrawalDestination.trim() });
-    setMessage(error ? error.message : requestId ? "Withdrawal request sent for admin review." : "Not enough available coins for this withdrawal.");
-    if (!error && requestId) {
-      setWithdrawalDestination("");
-      await loadProfile(user);
-    }
-    setBusy(false);
   };
 
   const authenticate = async (event: FormEvent) => {
@@ -223,7 +198,7 @@ export default function AccountPanel() {
             </section>
 
             <aside className="account-sidebar-content">
-              <section id="earnings" className="account-earnings-card"><div className="account-earnings-heading"><div><p className="account-eyebrow">REFERRAL REWARDS</p><h2>Earn with Omegley</h2></div><span className="coin-symbol">$</span></div><p>Invite a friend. When they create an account, you earn 100 coins worth $1.</p><div className="coin-balance"><strong>{profile.coin_balance}</strong><span>coins · ${(profile.coin_balance / 100).toFixed(2)}</span></div><small className="earnings-note">Available: {profile.coin_balance - profile.reserved_coins} coins · Lifetime earned: {profile.total_earned} coins</small><div className="referral-share"><input readOnly value={`https://www.omegley.in/account?ref=${profile.referral_code || ""}`} /><button type="button" onClick={() => { if (!profile.referral_code) return; void navigator.clipboard.writeText(`${window.location.origin}/account?ref=${profile.referral_code}`).then(() => { setReferralCopied(true); window.setTimeout(() => setReferralCopied(false), 1800); }); }}>{referralCopied ? "Copied" : "Copy link"}</button></div><span className="copy-status" aria-live="polite">{referralCopied ? "Copied to clipboard" : "Share this link with a friend"}</span>{transactions.length > 0 && <div className="earnings-history"><strong>Recent earnings</strong>{transactions.slice(0, 3).map((transaction) => <div key={transaction.id}><span>{transaction.description}</span><b>+{transaction.amount} coins</b></div>)}</div>}<form className="withdrawal-form" onSubmit={requestWithdrawal}><strong>Request a payout</strong><small>Minimum 5,000 coins ($50). Admin approval is required.</small><div className="withdrawal-fields"><input required min="5000" step="100" type="number" value={withdrawalAmount} onChange={(event) => setWithdrawalAmount(event.target.value)} aria-label="Coin amount" /><select value={withdrawalMethod} onChange={(event) => setWithdrawalMethod(event.target.value as "gift_card" | "cash_pending")} aria-label="Payout method"><option value="gift_card">Omegley gift card</option><option value="cash_pending">Cash payout (pending)</option></select></div><input required placeholder={withdrawalMethod === "gift_card" ? "Your email for delivery" : "Payout destination"} value={withdrawalDestination} onChange={(event) => setWithdrawalDestination(event.target.value)} /><button disabled={busy || profile.coin_balance - profile.reserved_coins < 5000} type="submit">{busy ? "Sending…" : "Request withdrawal"}</button></form></section>
+              <section id="earnings" className="account-earnings-card"><div className="account-earnings-heading"><div><p className="account-eyebrow">OMEGLEY WALLET</p><h2>Your rewards</h2></div><span className="coin-symbol">$</span></div><p>Earn coins through connections and referrals, then manage redemptions in your dedicated wallet.</p><div className="coin-balance"><strong>{profile.coin_balance - profile.reserved_coins}</strong><span>available coins · ${((profile.coin_balance - profile.reserved_coins) / 100).toFixed(2)}</span></div><small className="earnings-note">100 coins = $1 estimated reward value</small><Link href="/wallet" className="account-wallet-link">Open wallet <span>→</span></Link></section>
               <section className="account-info-section"><p className="account-eyebrow">ACCOUNT</p><h2>Account details</h2><div className="account-info-row"><span>Email</span><strong>{user.email}</strong></div><div className="account-info-row"><span>Sign-in method</span><strong>{provider}</strong></div><div className="account-info-row"><span>Member since</span><strong>{formatMemberDate(user.created_at)}</strong></div></section>
               <section className="account-info-section account-privacy-note"><p className="account-eyebrow">YOUR PRIVACY</p><h2>Stay in control</h2><p>Your account is optional. You can still use random chat without signing in. Profile details are only used to improve your experience.</p><Link href="/privacy">Read our privacy policy →</Link></section>
             </aside>
