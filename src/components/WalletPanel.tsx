@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import type { User } from "@supabase/supabase-js";
-import { supabase } from "@/lib/supabase-browser";
+import { isSupabaseConfigured, supabase } from "@/lib/supabase-browser";
 import { COIN_PACKS, formatInr, type CoinPack } from "@/lib/coin-packs";
 import { ArrowRight } from "@/components/icons";
 import { LogoMark } from "@/components/logo";
@@ -98,6 +98,25 @@ function formatDate(value: string) {
 
 function formatCoins(value: number) {
   return new Intl.NumberFormat().format(value);
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number) {
+  return new Promise<T>((resolve, reject) => {
+    const timeout = window.setTimeout(
+      () => reject(new Error("Wallet service is taking too long. Check your connection and try again.")),
+      timeoutMs,
+    );
+    promise.then(
+      (value) => {
+        window.clearTimeout(timeout);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timeout);
+        reject(error);
+      },
+    );
+  });
 }
 
 function WalletIcon({ name, className = "h-[18px] w-[18px]" }: { name: keyof typeof ICON_PATHS; className?: string }) {
@@ -265,27 +284,52 @@ export default function WalletPanel() {
   useEffect(() => {
     let mounted = true;
 
+    if (!isSupabaseConfigured) {
+      setNotice({ tone: "error", text: "Wallet access is not configured on this deployment. Add the public Supabase URL and publishable key, then redeploy." });
+      setLoading(false);
+      return () => {
+        mounted = false;
+      };
+    }
+
     const applyUser = async (currentUser: User | null) => {
       if (!mounted) return;
       setUser(currentUser);
-      if (currentUser) await loadWallet(currentUser);
-      else {
-        setWallet(EMPTY_WALLET);
-        setTransactions([]);
-        setWithdrawals([]);
-        setComplaints([]);
+      try {
+        if (currentUser) {
+          await withTimeout(loadWallet(currentUser), 12000);
+        } else {
+          setWallet(EMPTY_WALLET);
+          setTransactions([]);
+          setWithdrawals([]);
+          setComplaints([]);
+        }
+      } catch (error) {
+        if (mounted) {
+          setNotice({ tone: "error", text: error instanceof Error ? error.message : "Could not load your wallet. Please refresh and try again." });
+        }
+      } finally {
+        if (mounted) setLoading(false);
       }
-      if (mounted) setLoading(false);
     };
 
-    void supabase.auth.getUser().then(({ data }) => void applyUser(data.user));
+    void withTimeout(supabase.auth.getUser(), 12000)
+      .then(({ data }) => applyUser(data.user))
+      .catch((error: unknown) => {
+        if (mounted) {
+          setNotice({ tone: "error", text: error instanceof Error ? error.message : "Could not connect to the account service." });
+          setLoading(false);
+        }
+      });
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       void applyUser(session?.user ?? null);
     });
     const refreshOnFocus = () => {
-      void supabase.auth.getUser().then(({ data: current }) => {
-        if (current.user) void loadWallet(current.user);
-      });
+      void withTimeout(supabase.auth.getUser(), 12000)
+        .then(({ data: current }) => {
+          if (current.user) void withTimeout(loadWallet(current.user), 12000).catch(() => {});
+        })
+        .catch(() => {});
     };
     window.addEventListener("focus", refreshOnFocus);
 
