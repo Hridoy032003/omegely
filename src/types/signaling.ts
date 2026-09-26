@@ -18,6 +18,14 @@ export type SignalData =
   | { type: "answer"; sdp: RTCSessionDescriptionInit }
   | { type: "ice"; candidate: RTCIceCandidateInit };
 
+/** The only profile fields that may be shared with a matched stranger. */
+export interface PublicProfile {
+  display_name: string;
+  avatar_url: string;
+  bio: string;
+  interests: string[];
+}
+
 /** Message names published to a `signal:<clientId>` channel. */
 export const MSG = {
   /** "Want to pair?" — sent by the peer that initiates matchmaking. */
@@ -35,6 +43,7 @@ export const MSG = {
 export interface MatchPayload {
   from: string;
   country: string;
+  profile?: PublicProfile | null;
 }
 
 export interface RejectPayload {

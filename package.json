@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "typecheck": "tsc --noEmit",
+    "verify": "pnpm typecheck && pnpm build",
     "start": "next start",
     "lint": "next lint",
     "dev:admin": "pnpm --dir apps/admin dev",
