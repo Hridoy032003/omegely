@@ -12,6 +12,7 @@ import DemoPreview from "@/components/DemoPreview";
 import ChatPanel from "./ChatPanel";
 import {
   Bell,
+  Coins,
   MessageCircle,
   Mic,
   MicOff,
@@ -83,6 +84,19 @@ export default function VideoChat() {
   const [reportDetails, setReportDetails] = useState("");
   const [reportBusy, setReportBusy] = useState(false);
   const [reportNotice, setReportNotice] = useState<string | null>(null);
+  const [sendOpen, setSendOpen] = useState(false);
+  const [sendAuthLoading, setSendAuthLoading] = useState(false);
+  const [senderSignedIn, setSenderSignedIn] = useState<boolean | null>(null);
+  const [senderAvailableCoins, setSenderAvailableCoins] = useState(0);
+  const [sendAmount, setSendAmount] = useState("");
+  const [sendNote, setSendNote] = useState("");
+  const [sendReviewing, setSendReviewing] = useState(false);
+  const [sendBusy, setSendBusy] = useState(false);
+  const [sendComplete, setSendComplete] = useState(false);
+  const [sendNotice, setSendNotice] = useState<string | null>(null);
+  const [minimumSend, setMinimumSend] = useState(1);
+  const [sendsEnabled, setSendsEnabled] = useState(true);
+  const sendIdempotencyRef = useRef<string | null>(null);
 
   const startChat = () => {
     if (window.localStorage.getItem("omegley_age_confirmed") === "yes") {
@@ -130,6 +144,119 @@ export default function VideoChat() {
     }
   };
 
+  const resetSend = () => {
+    setSendOpen(false);
+    setSendAuthLoading(false);
+    setSenderSignedIn(null);
+    setSenderAvailableCoins(0);
+    setSendAmount("");
+    setSendNote("");
+    setSendReviewing(false);
+    setSendBusy(false);
+    setSendComplete(false);
+    setSendNotice(null);
+    sendIdempotencyRef.current = null;
+  };
+
+  const openSend = async () => {
+    setSendOpen(true);
+    setSendReviewing(false);
+    setSendComplete(false);
+    setSendNotice(null);
+    setSenderSignedIn(null);
+    setSendsEnabled(true);
+    setMinimumSend(1);
+    setSendAuthLoading(true);
+    try {
+      const { data: auth } = await supabase.auth.getUser();
+      const currentUser = auth.user;
+      setSenderSignedIn(Boolean(currentUser));
+      if (!currentUser) return;
+
+      const [profileResult, settingsResult] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("coin_balance, reserved_coins")
+          .eq("id", currentUser.id)
+          .maybeSingle(),
+        supabase.rpc("get_public_wallet_settings"),
+      ]);
+      setSenderAvailableCoins(Math.max(
+        0,
+        Number(profileResult.data?.coin_balance ?? 0) - Number(profileResult.data?.reserved_coins ?? 0),
+      ));
+      const settings = Array.isArray(settingsResult.data)
+        ? settingsResult.data[0]
+        : settingsResult.data;
+      if (settings) {
+        setSendsEnabled(Boolean(settings.coin_sends_enabled));
+        setMinimumSend(Math.max(1, Number(settings.minimum_send_coins) || 1));
+      }
+    } catch {
+      setSendNotice("Your wallet could not be loaded. Try again.");
+    } finally {
+      setSendAuthLoading(false);
+    }
+  };
+
+  const reviewSend = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const amount = Number(sendAmount);
+    if (!sendsEnabled) {
+      setSendNotice("Coin sending is temporarily paused.");
+      return;
+    }
+    if (!Number.isInteger(amount) || amount < minimumSend) {
+      setSendNotice(`Enter at least ${minimumSend.toLocaleString()} whole coins.`);
+      return;
+    }
+    if (amount > senderAvailableCoins) {
+      setSendNotice(`You have ${senderAvailableCoins.toLocaleString()} coins available to send.`);
+      return;
+    }
+    setSendNotice(null);
+    setSendReviewing(true);
+  };
+
+  const confirmSend = async () => {
+    const recipient = partnerProfile?.wallet_handle;
+    if (!recipient || sendBusy) return;
+    setSendBusy(true);
+    setSendNotice(null);
+    if (!sendIdempotencyRef.current) sendIdempotencyRef.current = crypto.randomUUID();
+    try {
+      const { data, error } = await supabase.rpc("send_coins", {
+        p_recipient: recipient,
+        p_amount: Number(sendAmount),
+        p_note: sendNote.trim(),
+        p_idempotency_key: sendIdempotencyRef.current,
+      });
+      const result = data as {
+        ok?: boolean;
+        error?: string;
+        recipient_name?: string;
+        already_processed?: boolean;
+      } | null;
+      if (error || !result?.ok) {
+        setSendNotice(result?.error || error?.message || "The coins could not be sent.");
+        return;
+      }
+      setSenderAvailableCoins((balance) => Math.max(0, balance - Number(sendAmount)));
+      setSendComplete(true);
+      setSendReviewing(false);
+      setSendNotice(
+        result.already_processed
+          ? "This send was already completed. Your balance is up to date."
+          : `${Number(sendAmount).toLocaleString()} coins sent to ${result.recipient_name || "this member"}.`,
+      );
+      window.dispatchEvent(new Event("omegley:wallet-updated"));
+    } catch {
+      setSendNotice("The send status could not be confirmed. Retry safely without creating a duplicate.");
+    } finally {
+      setSendBusy(false);
+    }
+  };
+
   useEffect(() => {
     return () => {
       if (swipeAnimationTimer.current) {
@@ -137,6 +264,11 @@ export default function VideoChat() {
       }
     };
   }, []);
+
+  // Never leave a confirmation open after the connected recipient changes.
+  useEffect(() => {
+    resetSend();
+  }, [partnerClientId]);
 
   useEffect(() => {
     if (!isSearching) {
@@ -285,6 +417,14 @@ export default function VideoChat() {
   };
 
   const knownCountry = partnerCountry && partnerCountry !== "XX";
+  const hasPartnerPublicProfile = Boolean(
+    partnerProfile && (
+      partnerProfile.display_name ||
+      partnerProfile.avatar_url ||
+      partnerProfile.bio ||
+      partnerProfile.interests.length > 0
+    ),
+  );
 
   return (
     <main className="relative mx-auto flex h-[100dvh] max-w-6xl flex-col gap-3 overflow-hidden p-3 sm:gap-4 sm:p-4">
@@ -455,7 +595,7 @@ export default function VideoChat() {
             )}
 
             {/* Match's shared profile — only present when they chose a public profile. */}
-            {isConnected && remoteReady && partnerProfile && (
+            {isConnected && remoteReady && partnerProfile && hasPartnerPublicProfile && (
               <div className="absolute left-3 right-3 top-14 max-w-xs rounded-card border border-white/15 bg-black/60 p-3 backdrop-blur sm:right-auto sm:max-w-sm">
                 <div className="flex items-center gap-2.5">
                   {partnerProfile.avatar_url ? (
@@ -567,6 +707,18 @@ export default function VideoChat() {
                   <SkipForward className="h-4 w-4" />
                   {isConnected ? "Next" : "Skip"}
                 </button>
+
+                {isConnected && (
+                  <button
+                    type="button"
+                    onClick={() => void openSend()}
+                    className="inline-flex h-10 cursor-pointer items-center gap-1.5 rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 text-xs font-semibold text-emerald-300 transition hover:border-emerald-400/45 hover:bg-emerald-400/20"
+                    aria-label="Send coins to the connected person"
+                  >
+                    <Coins className="h-4 w-4" />
+                    Send
+                  </button>
+                )}
 
                 <IconToggle
                   on={micOn}
@@ -689,6 +841,73 @@ export default function VideoChat() {
               <button type="submit" disabled={reportBusy} className="rounded-full bg-red-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{reportBusy ? "Sending…" : "Send report"}</button>
             </div>
           </form>
+        </div>
+      )}
+
+      {sendOpen && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+          <div role="dialog" aria-modal="true" aria-labelledby="send-coins-title" className="w-full max-w-md rounded-2xl border border-white/15 bg-neutral-950 p-6 shadow-2xl shadow-black/50">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300">Connected wallet</p>
+                <h2 id="send-coins-title" className="mt-2 text-xl font-semibold text-white">
+                  {partnerProfile?.wallet_handle ? "Send coins" : "Coins unavailable"}
+                </h2>
+              </div>
+              <button type="button" onClick={resetSend} aria-label="Close send coins" className="rounded-full border border-white/15 px-3 py-1.5 text-xs text-neutral-300 transition hover:bg-white/10">Close</button>
+            </div>
+
+            {sendAuthLoading ? (
+              <p className="mt-6 text-sm text-neutral-400">Opening your wallet…</p>
+            ) : !partnerProfile?.wallet_handle ? (
+              <div className="mt-5 rounded-xl border border-amber-400/20 bg-amber-400/10 p-4">
+                <p className="text-sm font-medium text-amber-100">This person cannot receive coins yet.</p>
+                <p className="mt-1 text-sm leading-relaxed text-amber-100/70">They need to sign in before a wallet can be linked to this chat.</p>
+              </div>
+            ) : senderSignedIn === false ? (
+              <div className="mt-5">
+                <p className="text-sm leading-relaxed text-neutral-300">Sign in to securely send coins to the person in this chat.</p>
+                <Link href="/account?mode=login" className="mt-5 inline-flex w-full items-center justify-center rounded-full bg-white px-5 py-3 text-sm font-semibold text-neutral-950 transition hover:bg-neutral-200">Sign in to send</Link>
+              </div>
+            ) : senderSignedIn === null ? (
+              <div className="mt-5">
+                <p role="alert" className="rounded-xl border border-red-400/20 bg-red-400/10 p-4 text-sm text-red-200">{sendNotice || "Your wallet could not be opened."}</p>
+                <button type="button" onClick={() => void openSend()} className="mt-5 w-full rounded-full border border-white/15 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10">Try again</button>
+              </div>
+            ) : sendComplete ? (
+              <div className="mt-5">
+                <div className="rounded-xl border border-emerald-400/25 bg-emerald-400/10 p-4 text-sm font-medium text-emerald-200" role="status">{sendNotice}</div>
+                <button type="button" onClick={resetSend} className="mt-5 w-full rounded-full bg-white px-5 py-3 text-sm font-semibold text-neutral-950 transition hover:bg-neutral-200">Done</button>
+              </div>
+            ) : sendReviewing ? (
+              <div className="mt-5">
+                <p className="text-sm text-neutral-400">Confirm this one-time send to the connected member.</p>
+                <div className="mt-4 rounded-xl border border-white/10 bg-white/5 p-4">
+                  <div className="flex items-center justify-between text-sm"><span className="text-neutral-400">Amount</span><strong className="text-white">{Number(sendAmount).toLocaleString()} coins</strong></div>
+                  <div className="mt-3 flex items-center justify-between text-sm"><span className="text-neutral-400">Recipient</span><strong className="max-w-48 truncate text-white">{partnerProfile.display_name || "Connected member"}</strong></div>
+                  {sendNote.trim() && <p className="mt-3 border-t border-white/10 pt-3 text-sm text-neutral-300">{sendNote.trim()}</p>}
+                </div>
+                {sendNotice && <p role="alert" className="mt-4 text-sm text-red-300">{sendNotice}</p>}
+                <div className="mt-6 flex gap-3">
+                  <button type="button" onClick={() => { setSendReviewing(false); setSendNotice(null); }} disabled={sendBusy} className="flex-1 rounded-full border border-white/15 px-4 py-2.5 text-sm text-neutral-300 transition hover:bg-white/10 disabled:opacity-50">Back</button>
+                  <button type="button" onClick={() => void confirmSend()} disabled={sendBusy} className="flex-1 rounded-full bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-neutral-950 transition hover:bg-emerald-400 disabled:opacity-50">{sendBusy ? "Sending…" : "Confirm send"}</button>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={reviewSend} className="mt-5">
+                <p className="text-sm leading-relaxed text-neutral-400">Send directly to <span className="font-medium text-white">{partnerProfile.display_name || "the connected member"}</span>. Available: {senderAvailableCoins.toLocaleString()} coins.</p>
+                <label className="mt-5 block text-sm text-neutral-300">Coins
+                  <input type="number" inputMode="numeric" min={minimumSend} step="1" required value={sendAmount} onChange={(event) => { setSendAmount(event.target.value); setSendNotice(null); sendIdempotencyRef.current = null; }} placeholder={`Minimum ${minimumSend.toLocaleString()}`} className="mt-2 w-full rounded-xl border border-white/15 bg-white/5 px-3 py-2.5 text-sm text-white outline-none placeholder:text-neutral-600 focus:border-emerald-400/60" />
+                </label>
+                <label className="mt-4 block text-sm text-neutral-300">Message <span className="text-neutral-600">(optional)</span>
+                  <input type="text" maxLength={160} value={sendNote} onChange={(event) => { setSendNote(event.target.value); sendIdempotencyRef.current = null; }} placeholder="Thanks for the conversation" className="mt-2 w-full rounded-xl border border-white/15 bg-white/5 px-3 py-2.5 text-sm text-white outline-none placeholder:text-neutral-600 focus:border-emerald-400/60" />
+                </label>
+                {sendNotice && <p role="alert" className="mt-4 text-sm text-red-300">{sendNotice}</p>}
+                <button type="submit" disabled={!sendsEnabled} className="mt-6 w-full rounded-full bg-emerald-500 px-5 py-3 text-sm font-semibold text-neutral-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50">Review send</button>
+                <p className="mt-3 text-center text-xs text-neutral-600">Coin sends are final. Confirm the amount before sending.</p>
+              </form>
+            )}
+          </div>
         </div>
       )}
     </main>

@@ -67,6 +67,12 @@ function withTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
 function sanitizePublicProfile(value: unknown): PublicProfile | null {
   if (!value || typeof value !== "object") return null;
   const profile = value as Record<string, unknown>;
+  const rawWalletHandle = typeof profile.wallet_handle === "string"
+    ? profile.wallet_handle.trim().toLowerCase()
+    : "";
+  const walletHandle = /^[a-z0-9]{3,64}$/.test(rawWalletHandle)
+    ? rawWalletHandle
+    : undefined;
   const interests = Array.isArray(profile.interests)
     ? profile.interests
         .filter((item): item is string => typeof item === "string")
@@ -78,6 +84,7 @@ function sanitizePublicProfile(value: unknown): PublicProfile | null {
     avatar_url: typeof profile.avatar_url === "string" ? profile.avatar_url.slice(0, 500) : "",
     bio: typeof profile.bio === "string" ? profile.bio.slice(0, 240) : "",
     interests,
+    wallet_handle: walletHandle,
   };
 }
 
@@ -381,11 +388,35 @@ export function useWebRTC() {
         : "";
     const { data } = await supabase
       .from("profiles")
-      .select("display_name, avatar_url, bio, interests, profile_visibility")
+      .select("display_name, avatar_url, bio, interests, profile_visibility, referral_code")
       .eq("id", auth.user.id)
       .maybeSingle();
 
-    if (data?.profile_visibility !== "public") return;
+    let walletHandle = typeof data?.referral_code === "string"
+      ? data.referral_code.trim().toLowerCase()
+      : "";
+    if (!/^[a-z0-9]{3,64}$/.test(walletHandle)) {
+      const { data: ensuredCode } = await supabase.rpc("ensure_my_referral_code");
+      walletHandle = typeof ensuredCode === "string" ? ensuredCode.trim().toLowerCase() : "";
+    }
+    const safeWalletHandle = /^[a-z0-9]{3,64}$/.test(walletHandle)
+      ? walletHandle
+      : undefined;
+
+    // A private profile still advertises its shareable wallet handle so the
+    // current match can send coins. Names, avatar, bio and interests remain private.
+    if (data?.profile_visibility !== "public") {
+      publicProfileRef.current = safeWalletHandle
+        ? {
+            display_name: "",
+            avatar_url: "",
+            bio: "",
+            interests: [],
+            wallet_handle: safeWalletHandle,
+          }
+        : null;
+      return;
+    }
 
     publicProfileRef.current = {
       display_name: typeof data.display_name === "string" ? data.display_name.slice(0, 80) : fallbackName.slice(0, 80),
@@ -394,6 +425,7 @@ export function useWebRTC() {
       interests: Array.isArray(data.interests)
         ? data.interests.filter((item): item is string => typeof item === "string").slice(0, 8).map((item) => item.slice(0, 40))
         : [],
+      wallet_handle: safeWalletHandle,
     };
   }, []);
 

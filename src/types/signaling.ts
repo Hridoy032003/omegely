@@ -24,6 +24,8 @@ export interface PublicProfile {
   avatar_url: string;
   bio: string;
   interests: string[];
+  /** Shareable wallet address used only to receive coins from this match. */
+  wallet_handle?: string;
 }
 
 /** Message names published to a `signal:<clientId>` channel. */

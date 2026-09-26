@@ -128,6 +128,14 @@ export const Share = (p: IconProps) => (
   </Svg>
 );
 
+export const Coins = (p: IconProps) => (
+  <Svg {...p}>
+    <ellipse cx="12" cy="6" rx="7" ry="3" />
+    <path d="M5 6v5c0 1.7 3.1 3 7 3s7-1.3 7-3V6" />
+    <path d="M5 11v5c0 1.7 3.1 3 7 3s7-1.3 7-3v-5" />
+  </Svg>
+);
+
 export const Users = (p: IconProps) => (
   <Svg {...p}>
     <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
