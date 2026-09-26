@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase-browser";
 import { COIN_PACKS, formatInr, type CoinPack } from "@/lib/coin-packs";
@@ -68,6 +68,10 @@ const DEFAULT_WITHDRAWAL_MINIMUM = 5000;
 const DEFAULT_CONNECTION_REWARD = 10;
 const DEFAULT_REFERRAL_REWARD = 100;
 const DEFAULT_REFERRAL_DAYS = 7;
+const DEFAULT_MINIMUM_SEND = 1;
+const DEFAULT_DAILY_SEND_LIMIT = 100000;
+const DEFAULT_DAILY_SEND_COUNT = 20;
+const MAX_SEND_PER_REQUEST = 1000000;
 const EMPTY_WALLET: WalletProfile = {
   displayName: "Omegley user",
   referralCode: "",
@@ -182,7 +186,7 @@ export default function WalletPanel() {
   const [transactions, setTransactions] = useState<CoinTransaction[]>([]);
   const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([]);
   const [complaints, setComplaints] = useState<WithdrawalComplaint[]>([]);
-  const [activeTab, setActiveTab] = useState<"earn" | "buy" | "redeem">("earn");
+  const [activeTab, setActiveTab] = useState<"earn" | "buy" | "send" | "redeem">("earn");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
@@ -201,11 +205,22 @@ export default function WalletPanel() {
   const [complaintMessage, setComplaintMessage] = useState("");
   const [complaintBusy, setComplaintBusy] = useState(false);
   const [reconcileBusy, setReconcileBusy] = useState(false);
+  const [sendRecipient, setSendRecipient] = useState("");
+  const [sendAmount, setSendAmount] = useState("");
+  const [sendNote, setSendNote] = useState("");
+  const [sendReviewing, setSendReviewing] = useState(false);
+  const [sendBusy, setSendBusy] = useState(false);
+  const [sendsEnabled, setSendsEnabled] = useState(true);
+  const [minimumSend, setMinimumSend] = useState(DEFAULT_MINIMUM_SEND);
+  const [dailySendLimit, setDailySendLimit] = useState(DEFAULT_DAILY_SEND_LIMIT);
+  const [dailySendCount, setDailySendCount] = useState(DEFAULT_DAILY_SEND_COUNT);
+  const sendIdempotencyRef = useRef<string | null>(null);
+  const withdrawalIdempotencyRef = useRef<string | null>(null);
 
   const loadWallet = useCallback(async (currentUser: User) => {
     // This is deliberately a narrow heartbeat used only for referral
     // qualification; it is not a browser/device fingerprint.
-    void supabase.from("profiles").update({ last_seen: new Date().toISOString() }).eq("id", currentUser.id);
+    void supabase.rpc("touch_my_last_seen");
     const anonymousWallet = window.localStorage.getItem("omegley_anonymous_wallet");
     if (anonymousWallet) {
       const { data: claimed } = await supabase.rpc("claim_anonymous_wallet", { p_wallet_id: anonymousWallet });
@@ -269,10 +284,14 @@ export default function WalletPanel() {
       setConnectionReward(Number(publicSettings.connection_reward_coins) || DEFAULT_CONNECTION_REWARD);
       setReferralReward(Number(publicSettings.referral_reward_coins) || DEFAULT_REFERRAL_REWARD);
       setReferralQualificationDays(Number(publicSettings.referral_qualification_days) || DEFAULT_REFERRAL_DAYS);
+      setSendsEnabled(Boolean(publicSettings.coin_sends_enabled));
+      setMinimumSend(Number(publicSettings.minimum_send_coins) || DEFAULT_MINIMUM_SEND);
+      setDailySendLimit(Number(publicSettings.daily_send_limit_coins) || DEFAULT_DAILY_SEND_LIMIT);
+      setDailySendCount(Number(publicSettings.daily_send_count_limit) || DEFAULT_DAILY_SEND_COUNT);
     }
 
     if (!profile?.referral_code) {
-      void supabase.from("profiles").update({ referral_code: referralCode }).eq("id", currentUser.id);
+      void supabase.rpc("ensure_my_referral_code");
     }
 
     const pendingReferral = window.localStorage.getItem("omegley_referral_code");
@@ -463,6 +482,77 @@ export default function WalletPanel() {
     }
   };
 
+  const reviewSend = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const amount = Number(sendAmount);
+    if (!sendRecipient.trim()) {
+      setNotice({ tone: "error", text: "Enter the recipient email or referral code." });
+      return;
+    }
+    if (!sendsEnabled) {
+      setNotice({ tone: "error", text: "Coin sending is temporarily paused." });
+      return;
+    }
+    if (!Number.isInteger(amount) || amount < minimumSend) {
+      setNotice({ tone: "error", text: `Enter at least ${formatCoins(minimumSend)} whole coins.` });
+      return;
+    }
+    if (amount > MAX_SEND_PER_REQUEST) {
+      setNotice({ tone: "error", text: `A single send cannot exceed ${formatCoins(MAX_SEND_PER_REQUEST)} coins.` });
+      return;
+    }
+    if (amount > availableCoins) {
+      setNotice({ tone: "error", text: `You have ${formatCoins(availableCoins)} coins available to send.` });
+      return;
+    }
+    setNotice(null);
+    setSendReviewing(true);
+  };
+
+  const confirmSend = async () => {
+    if (!user || sendBusy || !sendReviewing) return;
+    setSendBusy(true);
+    setNotice(null);
+    if (!sendIdempotencyRef.current) sendIdempotencyRef.current = crypto.randomUUID();
+    try {
+      const { data, error } = await supabase.rpc("send_coins", {
+        p_recipient: sendRecipient.trim(),
+        p_amount: Number(sendAmount),
+        p_note: sendNote.trim(),
+        p_idempotency_key: sendIdempotencyRef.current,
+      });
+      const result = data as {
+        ok?: boolean;
+        error?: string;
+        recipient_name?: string;
+        already_processed?: boolean;
+      } | null;
+
+      if (error || !result?.ok) {
+        setNotice({ tone: "error", text: result?.error || error?.message || "The coins could not be sent." });
+      } else {
+        const recipientName = result.recipient_name || "the recipient";
+        setNotice({
+          tone: "success",
+          text: result.already_processed
+            ? "This send was already completed. Your balance is up to date."
+            : `${formatCoins(Number(sendAmount))} coins were sent to ${recipientName}.`,
+        });
+        setSendRecipient("");
+        setSendAmount("");
+        setSendNote("");
+        setSendReviewing(false);
+        sendIdempotencyRef.current = null;
+        await loadWallet(user);
+        window.dispatchEvent(new Event("omegley:wallet-updated"));
+      }
+    } catch {
+      setNotice({ tone: "error", text: "The send status could not be confirmed. Retry the same send safely." });
+    } finally {
+      setSendBusy(false);
+    }
+  };
+
   const requestWithdrawal = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!user || busy) return;
@@ -481,23 +571,31 @@ export default function WalletPanel() {
 
     setBusy(true);
     setNotice(null);
-    const { data: requestId, error } = await supabase.rpc("request_withdrawal", {
-      p_amount_coins: amount,
-      p_method: withdrawalMethod,
-      p_destination: withdrawalDestination.trim(),
-    });
-
-    if (error || !requestId) {
-      setNotice({
-        tone: "error",
-        text: error?.message || "This request could not be submitted. Check your available balance and try again.",
+    if (!withdrawalIdempotencyRef.current) withdrawalIdempotencyRef.current = crypto.randomUUID();
+    try {
+      const { data: requestId, error } = await supabase.rpc("request_withdrawal_v2", {
+        p_amount_coins: amount,
+        p_method: withdrawalMethod,
+        p_destination: withdrawalDestination.trim(),
+        p_idempotency_key: withdrawalIdempotencyRef.current,
       });
-    } else {
-      setNotice({ tone: "success", text: "Your redemption request was sent for admin review." });
-      setWithdrawalDestination("");
-      await loadWallet(user);
+
+      if (error || !requestId) {
+        setNotice({
+          tone: "error",
+          text: error?.message || "This request could not be submitted. Check your available balance and try again.",
+        });
+      } else {
+        setNotice({ tone: "success", text: "Your redemption request was sent for admin review." });
+        setWithdrawalDestination("");
+        withdrawalIdempotencyRef.current = null;
+        await loadWallet(user);
+      }
+    } catch {
+      setNotice({ tone: "error", text: "The request status could not be confirmed. Retry safely with the same details." });
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
   };
 
   const fileComplaint = async (event: FormEvent<HTMLFormElement>) => {
@@ -643,12 +741,13 @@ export default function WalletPanel() {
         <div
           role="tablist"
           aria-label="Wallet actions"
-          className="mt-8 grid w-full max-w-2xl grid-cols-3 gap-1 rounded-card border border-line bg-white/[0.02] p-1"
+          className="mt-8 grid w-full grid-cols-2 gap-1 rounded-card border border-line bg-white/[0.02] p-1 sm:max-w-3xl sm:grid-cols-4"
         >
           {(
             [
               { id: "earn", title: "Earn coins", sub: "Earn through Omegley" },
               { id: "buy", title: "Buy coins", sub: "Razorpay checkout" },
+              { id: "send", title: "Send coins", sub: "Send to a member" },
               { id: "redeem", title: "Redeem", sub: "Request a payout" },
             ] as const
           ).map((tab) => (
@@ -678,6 +777,41 @@ export default function WalletPanel() {
               reconcileBusy={reconcileBusy}
               onPurchase={(pack) => void purchaseCoins(pack)}
               onReconcile={() => void reconcilePayments()}
+            />
+          ) : activeTab === "send" ? (
+            <SendCoinsPanel
+              availableCoins={availableCoins}
+              sendsEnabled={sendsEnabled}
+              minimumSend={minimumSend}
+              dailySendLimit={dailySendLimit}
+              dailySendCount={dailySendCount}
+              recipient={sendRecipient}
+              amount={sendAmount}
+              note={sendNote}
+              reviewing={sendReviewing}
+              busy={sendBusy}
+              notice={notice}
+              onRecipientChange={(value) => {
+                sendIdempotencyRef.current = null;
+                setSendRecipient(value);
+                setSendReviewing(false);
+                setNotice(null);
+              }}
+              onAmountChange={(value) => {
+                sendIdempotencyRef.current = null;
+                setSendAmount(value);
+                setSendReviewing(false);
+                setNotice(null);
+              }}
+              onNoteChange={(value) => {
+                sendIdempotencyRef.current = null;
+                setSendNote(value);
+                setSendReviewing(false);
+                setNotice(null);
+              }}
+              onReview={reviewSend}
+              onBack={() => setSendReviewing(false)}
+              onConfirm={() => void confirmSend()}
             />
           ) : activeTab === "earn" ? (
             <>
@@ -814,7 +948,10 @@ export default function WalletPanel() {
                         max={Math.max(withdrawalMinimum, availableCoins)}
                         step="100"
                         value={withdrawalAmount}
-                        onChange={(event) => setWithdrawalAmount(event.target.value)}
+                        onChange={(event) => {
+                          withdrawalIdempotencyRef.current = null;
+                          setWithdrawalAmount(event.target.value);
+                        }}
                       />
                     </Field>
                     <Field label="Reward method" htmlFor="redeem-method">
@@ -822,9 +959,10 @@ export default function WalletPanel() {
                         id="redeem-method"
                         className={CONTROL}
                         value={withdrawalMethod}
-                        onChange={(event) =>
+                        onChange={(event) => {
+                          withdrawalIdempotencyRef.current = null;
                           setWithdrawalMethod(event.target.value as "gift_card" | "cash_pending")
-                        }
+                        }}
                       >
                         <option value="gift_card">Omegley gift card</option>
                         <option value="cash_pending">Cash payout (review)</option>
@@ -847,7 +985,10 @@ export default function WalletPanel() {
                         withdrawalMethod === "gift_card" ? "you@example.com" : "Enter your payout details"
                       }
                       value={withdrawalDestination}
-                      onChange={(event) => setWithdrawalDestination(event.target.value)}
+                      onChange={(event) => {
+                        withdrawalIdempotencyRef.current = null;
+                        setWithdrawalDestination(event.target.value);
+                      }}
                     />
                   </Field>
 
@@ -942,6 +1083,138 @@ function EarnRow({
       </div>
       <span className="shrink-0 text-sm font-semibold whitespace-nowrap text-positive">{reward}</span>
     </article>
+  );
+}
+
+function SendCoinsPanel({
+  availableCoins,
+  sendsEnabled,
+  minimumSend,
+  dailySendLimit,
+  dailySendCount,
+  recipient,
+  amount,
+  note,
+  reviewing,
+  busy,
+  notice,
+  onRecipientChange,
+  onAmountChange,
+  onNoteChange,
+  onReview,
+  onBack,
+  onConfirm,
+}: {
+  availableCoins: number;
+  sendsEnabled: boolean;
+  minimumSend: number;
+  dailySendLimit: number;
+  dailySendCount: number;
+  recipient: string;
+  amount: string;
+  note: string;
+  reviewing: boolean;
+  busy: boolean;
+  notice: { tone: "success" | "error"; text: string } | null;
+  onRecipientChange: (value: string) => void;
+  onAmountChange: (value: string) => void;
+  onNoteChange: (value: string) => void;
+  onReview: (event: FormEvent<HTMLFormElement>) => void;
+  onBack: () => void;
+  onConfirm: () => void;
+}) {
+  const numericAmount = Number(amount) || 0;
+
+  return (
+    <div className="grid gap-6 lg:col-span-2 lg:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.65fr)]">
+      <Panel className="p-6 sm:p-7">
+        <PanelHead
+          label="Send coins"
+          title={reviewing ? "Review before sending" : "Send coins to a member"}
+          description={
+            reviewing
+              ? "Check the recipient and amount carefully. Completed sends cannot be reversed from the wallet."
+              : "Use the member's account email or referral code. Coins arrive immediately after server verification."
+          }
+        />
+
+        {reviewing ? (
+          <div className="mt-6">
+            <dl className="rounded-card border border-line bg-white/[0.02] px-4">
+              <RuleRow label="Recipient" value={recipient.trim()} />
+              <RuleRow label="Amount" value={`${formatCoins(numericAmount)} coins`} />
+              <RuleRow label="Remaining balance" value={`${formatCoins(Math.max(0, availableCoins - numericAmount))} coins`} />
+              <RuleRow label="Note" value={note.trim() || "No note"} />
+            </dl>
+            <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <Button type="button" variant="outline" disabled={busy} onClick={onBack}>Back</Button>
+              <Button type="button" variant="brand" disabled={busy} onClick={onConfirm}>
+                {busy ? "Sending securely…" : `Confirm ${formatCoins(numericAmount)} coin send`}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <form className="mt-6 grid gap-5" onSubmit={onReview}>
+            <Field label="Recipient" hint="Account email or referral code" htmlFor="send-recipient">
+              <input
+                id="send-recipient"
+                className={CONTROL}
+                required
+                autoComplete="off"
+                placeholder="friend@example.com or referral code"
+                value={recipient}
+                onChange={(event) => onRecipientChange(event.target.value)}
+              />
+            </Field>
+            <Field label="Coins to send" hint={`${formatCoins(availableCoins)} available`} htmlFor="send-amount">
+              <input
+                id="send-amount"
+                className={CONTROL}
+                required
+                type="number"
+                min={minimumSend}
+                max={Math.max(minimumSend, Math.min(availableCoins, MAX_SEND_PER_REQUEST))}
+                step="1"
+                inputMode="numeric"
+                placeholder="100"
+                value={amount}
+                onChange={(event) => onAmountChange(event.target.value)}
+              />
+            </Field>
+            <Field label="Note" hint="Optional · 160 characters" htmlFor="send-note">
+              <input
+                id="send-note"
+                className={CONTROL}
+                maxLength={160}
+                placeholder="Thanks!"
+                value={note}
+                onChange={(event) => onNoteChange(event.target.value)}
+              />
+            </Field>
+            <Button type="submit" variant="brand" block disabled={busy || !sendsEnabled || availableCoins < minimumSend}>
+              {sendsEnabled ? "Review send" : "Coin sending is paused"}
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          </form>
+        )}
+
+        {notice && <div className="mt-5"><Notice tone={notice.tone}>{notice.text}</Notice></div>}
+      </Panel>
+
+      <Panel tone="brand" className="p-6">
+        <PanelHead label="Available balance" title={`${formatCoins(availableCoins)} coins`} />
+        <div className="mt-5 border-t border-line">
+          <PreviewRow label="Delivery" value="Immediate" />
+          <PreviewRow label="Processing fee" value="0 coins" />
+          <PreviewRow label="Minimum send" value={`${formatCoins(minimumSend)} coins`} />
+          <PreviewRow label="Daily limit" value={`${formatCoins(dailySendLimit)} coins`} />
+          <PreviewRow label="Maximum sends" value={`${formatCoins(dailySendCount)} / 24h`} />
+        </div>
+        <p className="mt-5 text-2xs leading-relaxed text-ink-4">
+          Pending redemption coins cannot be sent. Each completed send is recorded for both members in the coin ledger.
+        </p>
+      </Panel>
+    </div>
   );
 }
 

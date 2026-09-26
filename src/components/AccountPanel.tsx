@@ -104,7 +104,7 @@ export default function AccountPanel() {
 
   const loadProfile = useCallback(async (currentUser: User) => {
     const google = googleDetails(currentUser);
-    void supabase.from("profiles").update({ last_seen: new Date().toISOString() }).eq("id", currentUser.id);
+    void supabase.rpc("touch_my_last_seen");
     const anonymousWallet = window.localStorage.getItem("omegley_anonymous_wallet");
     if (anonymousWallet) {
       const { data: claimed } = await supabase.rpc("claim_anonymous_wallet", { p_wallet_id: anonymousWallet });
@@ -135,7 +135,7 @@ export default function AccountPanel() {
     });
 
     if (!data?.referral_code) {
-      void supabase.from("profiles").update({ referral_code: fallbackReferralCode }).eq("id", currentUser.id);
+      void supabase.rpc("ensure_my_referral_code");
     }
 
     if (data && (google.name || google.avatar) && (!data.display_name || !data.avatar_url)) {

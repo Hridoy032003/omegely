@@ -41,7 +41,10 @@ export async function GET(request: NextRequest) {
       referrals: referrals.count ?? referrals.data?.length ?? 0,
       coinsIssued:
         (earningsProfiles.data ?? []).reduce((total, user) => total + Number(user.total_earned ?? 0), 0) +
-        (anonymousWallets.data ?? []).reduce((total, wallet) => total + Number(wallet.total_earned ?? 0), 0),
+        (anonymousWallets.data ?? []).reduce(
+          (total, wallet) => total + (wallet.claimed_by ? 0 : Number(wallet.total_earned ?? 0)),
+          0,
+        ),
     },
     users: ((users.data ?? []) as ProfileRow[]).map((user) => ({
       ...user,

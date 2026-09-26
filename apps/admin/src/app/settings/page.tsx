@@ -14,6 +14,10 @@ type Settings = {
   daily_connection_reward_limit: number;
   referral_qualification_days: number;
   mutual_connection_required: boolean;
+  coin_sends_enabled: boolean;
+  minimum_send_coins: number;
+  daily_send_limit_coins: number;
+  daily_send_count_limit: number;
 };
 
 const DEFAULTS: Settings = {
@@ -26,6 +30,10 @@ const DEFAULTS: Settings = {
   daily_connection_reward_limit: 100,
   referral_qualification_days: 7,
   mutual_connection_required: true,
+  coin_sends_enabled: true,
+  minimum_send_coins: 1,
+  daily_send_limit_coins: 100000,
+  daily_send_count_limit: 20,
 };
 
 export default function SettingsPage() {
@@ -113,6 +121,13 @@ export default function SettingsPage() {
               onChange={(value) => set("referral_rewards_enabled", value)}
             />
             <Toggle
+              label="Coin sending enabled"
+              description="Allow registered members to send available coins to each other."
+              checked={draft.coin_sends_enabled}
+              disabled={loading}
+              onChange={(value) => set("coin_sends_enabled", value)}
+            />
+            <Toggle
               label="Mutual connection required"
               description="Keep rewards tied to a completed two-person connection."
               checked={draft.mutual_connection_required}
@@ -124,8 +139,8 @@ export default function SettingsPage() {
 
         <Panel>
           <PanelHead
-            title="Withdrawal policy"
-            description="Users must reach this balance before they can request a payout."
+            title="Wallet policy"
+            description="Control earning, sending, and withdrawal limits."
           />
           <div className="panel-body grid">
             <div className="grid grid--halves">
@@ -148,6 +163,21 @@ export default function SettingsPage() {
                 <label htmlFor="referral-qualification-days">Referral qualification days</label>
                 <input id="referral-qualification-days" className="input" type="number" min="1" max="30" step="1" disabled={loading} value={draft.referral_qualification_days} onChange={(event) => set("referral_qualification_days", Number(event.target.value))} />
                 <span className="field-hint">The referred user must return after this window.</span>
+              </div>
+              <div className="field">
+                <label htmlFor="minimum-send-coins">Minimum send</label>
+                <input id="minimum-send-coins" className="input" type="number" min="1" max="100000" step="1" disabled={loading} value={draft.minimum_send_coins} onChange={(event) => set("minimum_send_coins", Number(event.target.value))} />
+                <span className="field-hint">Smallest coin send a member can submit.</span>
+              </div>
+              <div className="field">
+                <label htmlFor="daily-send-limit">Daily send amount</label>
+                <input id="daily-send-limit" className="input" type="number" min="1" max="10000000" step="1" disabled={loading} value={draft.daily_send_limit_coins} onChange={(event) => set("daily_send_limit_coins", Number(event.target.value))} />
+                <span className="field-hint">Maximum coins one member can send in 24 hours.</span>
+              </div>
+              <div className="field">
+                <label htmlFor="daily-send-count">Daily send count</label>
+                <input id="daily-send-count" className="input" type="number" min="1" max="100" step="1" disabled={loading} value={draft.daily_send_count_limit} onChange={(event) => set("daily_send_count_limit", Number(event.target.value))} />
+                <span className="field-hint">Maximum completed sends per member in 24 hours.</span>
               </div>
             </div>
             <div className="field">

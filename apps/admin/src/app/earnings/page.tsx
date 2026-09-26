@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { useAdmin, type DashboardData } from "@/lib/admin-store";
 import { Coins, Users } from "@/components/icons";
 import {
@@ -329,6 +329,7 @@ function CreditForm() {
   const [userId, setUserId] = useState("");
   const [amount, setAmount] = useState("10");
   const [reason, setReason] = useState("Admin bonus");
+  const idempotencyRef = useRef<string | null>(null);
 
   // The user list arrives after the first render, so the default has to follow
   // it — otherwise the form posts an empty user_id.
@@ -347,12 +348,17 @@ function CreditForm() {
       setMessage({ tone: "error", text: "Enter a whole number of coins above zero." });
       return;
     }
+    if (!idempotencyRef.current) idempotencyRef.current = crypto.randomUUID();
     const ok = await post("/api/admin/earnings/credit", {
       user_id: userId,
       amount_coins: coins,
       message: reason,
+      idempotency_key: idempotencyRef.current,
     });
-    if (ok) setMessage({ tone: "success", text: `Credited ${formatCoins(coins)} coins.` });
+    if (ok) {
+      idempotencyRef.current = null;
+      setMessage({ tone: "success", text: `Credited ${formatCoins(coins)} coins.` });
+    }
   };
 
   return (
@@ -366,7 +372,10 @@ function CreditForm() {
             className="select"
             value={userId}
             disabled={!data.users.length}
-            onChange={(event) => setUserId(event.target.value)}
+            onChange={(event) => {
+              idempotencyRef.current = null;
+              setUserId(event.target.value);
+            }}
           >
             {data.users.length ? (
               data.users.map((user) => (
@@ -388,7 +397,10 @@ function CreditForm() {
             min="1"
             step="1"
             value={amount}
-            onChange={(event) => setAmount(event.target.value)}
+            onChange={(event) => {
+              idempotencyRef.current = null;
+              setAmount(event.target.value);
+            }}
           />
           <span className="field-hint">100 coins = 1 dollar</span>
         </div>
@@ -400,7 +412,10 @@ function CreditForm() {
             required
             maxLength={240}
             value={reason}
-            onChange={(event) => setReason(event.target.value)}
+            onChange={(event) => {
+              idempotencyRef.current = null;
+              setReason(event.target.value);
+            }}
           />
         </div>
         <button type="submit" className="btn btn--primary" disabled={busy || !userId}>

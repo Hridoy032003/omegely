@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "../../../../lib/admin-server";
 
-const COLUMNS = "withdrawals_enabled, withdrawal_minimum_coins, connection_rewards_enabled, referral_rewards_enabled, connection_reward_coins, referral_reward_coins, daily_connection_reward_limit, referral_qualification_days, mutual_connection_required, updated_at";
+const COLUMNS = "withdrawals_enabled, withdrawal_minimum_coins, connection_rewards_enabled, referral_rewards_enabled, connection_reward_coins, referral_reward_coins, daily_connection_reward_limit, referral_qualification_days, mutual_connection_required, coin_sends_enabled, minimum_send_coins, daily_send_limit_coins, daily_send_count_limit, updated_at";
 
 const DEFAULTS = {
   withdrawals_enabled: true,
@@ -13,6 +13,10 @@ const DEFAULTS = {
   daily_connection_reward_limit: 100,
   referral_qualification_days: 7,
   mutual_connection_required: true,
+  coin_sends_enabled: true,
+  minimum_send_coins: 1,
+  daily_send_limit_coins: 100000,
+  daily_send_count_limit: 20,
 };
 
 export async function GET(request: NextRequest) {
@@ -30,7 +34,7 @@ export async function PATCH(request: NextRequest) {
   if (context instanceof NextResponse) return context;
   const body = await request.json().catch(() => ({}));
   const updates: Record<string, boolean | number | string> = { updated_at: new Date().toISOString() };
-  for (const key of ["withdrawals_enabled", "connection_rewards_enabled", "referral_rewards_enabled", "mutual_connection_required"]) {
+  for (const key of ["withdrawals_enabled", "connection_rewards_enabled", "referral_rewards_enabled", "mutual_connection_required", "coin_sends_enabled"]) {
     if (typeof body[key] === "boolean") updates[key] = body[key];
   }
   if (body.withdrawal_minimum_coins !== undefined) {
@@ -44,6 +48,17 @@ export async function PATCH(request: NextRequest) {
     const valid = key === "referral_qualification_days"
       ? Number.isInteger(value) && value >= 1 && value <= 30
       : Number.isInteger(value) && value > 0 && value <= (key === "daily_connection_reward_limit" ? 10000 : key === "referral_reward_coins" ? 5000 : 1000);
+    if (!valid) return NextResponse.json({ error: `${key.replaceAll("_", " ")} is outside the allowed range.` }, { status: 400 });
+    updates[key] = value;
+  }
+  for (const key of ["minimum_send_coins", "daily_send_limit_coins", "daily_send_count_limit"]) {
+    if (body[key] === undefined) continue;
+    const value = Number(body[key]);
+    const valid = Number.isInteger(value) && value > 0 && (
+      key === "minimum_send_coins" ? value <= 100000 :
+      key === "daily_send_limit_coins" ? value <= 10000000 :
+      value <= 100
+    );
     if (!valid) return NextResponse.json({ error: `${key.replaceAll("_", " ")} is outside the allowed range.` }, { status: 400 });
     updates[key] = value;
   }

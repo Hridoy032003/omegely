@@ -19,3 +19,7 @@ the Razorpay webhook URL as `/api/payments/razorpay/webhook` for
 `0012_anonymous_wallet_visibility.sql` as well so anonymous balances can be
 shown in chat and claimed after sign-in. Use test-mode keys first; the initial
 packs are defined in `src/lib/coin-packs.ts`.
+
+Apply `0013_coin_ledger_hardening.sql` after `0012`. It adds atomic,
+idempotent coin sends, withdrawal requests, admin credits, and withdrawal
+review so concurrent requests cannot overwrite wallet balances.
