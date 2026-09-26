@@ -11,9 +11,14 @@ type Profile = {
   avatar_url: string | null;
   bio: string | null;
   interests: string[] | null;
+  profile_visibility: "public" | "private";
+  referral_code: string | null;
+  coin_balance: number;
+  total_earned: number;
 };
+type CoinTransaction = { id: string; amount: number; description: string; created_at: string };
 
-const EMPTY_PROFILE: Profile = { display_name: "", avatar_url: "", bio: "", interests: [] };
+const EMPTY_PROFILE: Profile = { display_name: "", avatar_url: "", bio: "", interests: [], profile_visibility: "private", referral_code: null, coin_balance: 0, total_earned: 0 };
 
 function googleDetails(user: User) {
   const metadata = user.user_metadata ?? {};
@@ -50,8 +55,12 @@ export default function AccountPanel() {
   const [editing, setEditing] = useState(false);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [referralCopied, setReferralCopied] = useState(false);
+  const [transactions, setTransactions] = useState<CoinTransaction[]>([]);
 
   useEffect(() => {
+    const referralCode = new URLSearchParams(window.location.search).get("ref");
+    if (referralCode) window.localStorage.setItem("omegley_referral_code", referralCode.toLowerCase());
     void supabase.auth.getUser().then(({ data }) => {
       setUser(data.user ?? null);
       if (data.user) void loadProfile(data.user);
@@ -59,7 +68,7 @@ export default function AccountPanel() {
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
       if (session?.user) void loadProfile(session.user);
-      else setProfile(EMPTY_PROFILE);
+      else { setProfile(EMPTY_PROFILE); setTransactions([]); }
     });
     return () => data.subscription.unsubscribe();
   }, []);
@@ -68,7 +77,7 @@ export default function AccountPanel() {
     const google = googleDetails(currentUser);
     const { data } = await supabase
       .from("profiles")
-      .select("display_name, avatar_url, bio, interests")
+      .select("display_name, avatar_url, bio, interests, profile_visibility, referral_code, coin_balance, total_earned")
       .eq("id", currentUser.id)
       .maybeSingle();
     const nextProfile = {
@@ -76,8 +85,17 @@ export default function AccountPanel() {
       ...(data ?? {}),
       display_name: data?.display_name || google.name,
       avatar_url: google.avatar || data?.avatar_url || "",
+      profile_visibility: data?.profile_visibility === "public" ? "public" : "private",
     };
     setProfile(nextProfile);
+    const { data: transactionData } = await supabase.from("coin_transactions").select("id, amount, description, created_at").eq("user_id", currentUser.id).order("created_at", { ascending: false }).limit(5);
+    setTransactions(transactionData ?? []);
+
+    const referralCode = window.localStorage.getItem("omegley_referral_code");
+    if (referralCode) {
+      const { data: claimed } = await supabase.rpc("claim_referral", { p_referral_code: referralCode });
+      if (claimed) window.localStorage.removeItem("omegley_referral_code");
+    }
 
     if (data && (google.name || google.avatar) && (!data.display_name || !data.avatar_url)) {
       void supabase.from("profiles").update({
@@ -115,6 +133,7 @@ export default function AccountPanel() {
       avatar_url: profile.avatar_url?.trim() || null,
       bio: profile.bio?.trim() || null,
       interests: profile.interests ?? [],
+      profile_visibility: profile.profile_visibility,
       updated_at: new Date().toISOString(),
     }).eq("id", user.id);
     setMessage(error?.message ?? "Profile saved successfully.");
@@ -161,12 +180,13 @@ export default function AccountPanel() {
                   <div className="account-form-actions"><button disabled={busy} className="account-save-button" type="submit">{busy ? "Saving…" : "Save changes"}</button><button disabled={busy} type="button" className="account-cancel-button" onClick={() => { setEditing(false); setMessage(""); }}>Cancel</button></div>
                 </form>
               ) : (
-                <div className="profile-details-readonly"><div><span>Display name</span><strong>{name}</strong></div><div><span>About</span><strong>{profile.bio || "No bio added yet."}</strong></div><div><span>Interests</span><div className="interest-list">{profile.interests?.length ? profile.interests.map((interest) => <span key={interest}>{interest}</span>) : <strong>No interests added yet.</strong>}</div></div></div>
+                <div className="profile-details-readonly"><div><span>Display name</span><strong>{name}</strong></div><div><span>About</span><strong>{profile.bio || "No bio added yet."}</strong></div><div><span>Interests</span><div className="interest-list">{profile.interests?.length ? profile.interests.map((interest) => <span key={interest}>{interest}</span>) : <strong>No interests added yet.</strong>}</div></div><div><span>Chat profile</span><strong>{profile.profile_visibility === "public" ? "Public — shared with your match" : "Private — not shared"}</strong></div></div>
               )}
               {message && <p className={`account-message ${message.includes("success") || message === "Profile saved successfully." ? "success" : ""}`}>{message}</p>}
             </section>
 
             <aside className="account-sidebar-content">
+              <section id="earnings" className="account-earnings-card"><div className="account-earnings-heading"><div><p className="account-eyebrow">REFERRAL REWARDS</p><h2>Earn with Omegley</h2></div><span className="coin-symbol">$</span></div><p>Invite a friend. When they create an account, you earn 1 coin worth $1.</p><div className="coin-balance"><strong>{profile.coin_balance}</strong><span>coins · ${profile.coin_balance}.00</span></div><div className="referral-share"><input readOnly value={`https://www.omegley.in/account?ref=${profile.referral_code || ""}`} /><button type="button" onClick={() => { if (!profile.referral_code) return; void navigator.clipboard.writeText(`${window.location.origin}/account?ref=${profile.referral_code}`).then(() => { setReferralCopied(true); window.setTimeout(() => setReferralCopied(false), 1800); }); }}>{referralCopied ? "Copied" : "Copy link"}</button></div><small className="earnings-note">Lifetime earned: {profile.total_earned} coin · ${profile.total_earned}.00</small>{transactions.length > 0 && <div className="earnings-history"><strong>Recent earnings</strong>{transactions.slice(0, 3).map((transaction) => <div key={transaction.id}><span>{transaction.description}</span><b>+{transaction.amount} coin</b></div>)}</div>}</section>
               <section className="account-info-section"><p className="account-eyebrow">ACCOUNT</p><h2>Account details</h2><div className="account-info-row"><span>Email</span><strong>{user.email}</strong></div><div className="account-info-row"><span>Sign-in method</span><strong>{provider}</strong></div><div className="account-info-row"><span>Member since</span><strong>{formatMemberDate(user.created_at)}</strong></div></section>
               <section className="account-info-section account-privacy-note"><p className="account-eyebrow">YOUR PRIVACY</p><h2>Stay in control</h2><p>Your account is optional. You can still use random chat without signing in. Profile details are only used to improve your experience.</p><Link href="/privacy">Read our privacy policy →</Link></section>
             </aside>

@@ -5,20 +5,22 @@ import { useRouter } from "next/navigation";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase-browser";
 
-type Section = "dashboard" | "users" | "reports" | "feedback";
+type Section = "dashboard" | "users" | "reports" | "feedback" | "earnings";
 
 type DashboardData = {
-  counts: { users: number; banned: number; reports: number; openReports: number; feedback: number; openFeedback: number };
-  users: Array<{ id: string; email: string | null; display_name: string | null; role: string; is_banned: boolean; created_at: string; last_seen: string | null }>;
+  counts: { users: number; banned: number; reports: number; openReports: number; feedback: number; openFeedback: number; referrals: number; coinsIssued: number };
+  users: Array<{ id: string; email: string | null; display_name: string | null; role: string; is_banned: boolean; created_at: string; last_seen: string | null; referral_code: string | null; coin_balance: number; total_earned: number }>;
   reports: Array<{ id: string; reporter_id: string | null; target_user_id: string | null; reason: string; details: string | null; status: string; created_at: string; reviewed_at: string | null }>;
   feedback: Array<{ id: string; user_id: string | null; email: string | null; kind: string; message: string; page_url: string | null; status: string; admin_note: string | null; created_at: string; updated_at: string }>;
+  referrals: Array<{ id: string; referrer_id: string; referred_id: string; referral_code: string; status: string; reward_coins: number; created_at: string; qualified_at: string }>;
 };
 
 const EMPTY: DashboardData = {
-  counts: { users: 0, banned: 0, reports: 0, openReports: 0, feedback: 0, openFeedback: 0 },
+  counts: { users: 0, banned: 0, reports: 0, openReports: 0, feedback: 0, openFeedback: 0, referrals: 0, coinsIssued: 0 },
   users: [],
   reports: [],
   feedback: [],
+  referrals: [],
 };
 
 const NAV_ITEMS: Array<{ id: Section; label: string; icon: string }> = [
@@ -26,6 +28,7 @@ const NAV_ITEMS: Array<{ id: Section; label: string; icon: string }> = [
   { id: "users", label: "Users", icon: "◎" },
   { id: "reports", label: "Safety reports", icon: "!" },
   { id: "feedback", label: "Feedback", icon: "✦" },
+  { id: "earnings", label: "Earnings", icon: "$" },
 ];
 
 type UpdateAction = (path: string, body: Record<string, unknown>) => Promise<void>;
@@ -178,6 +181,7 @@ export default function AdminPage({ initialSection = "dashboard" }: { initialSec
           {activeSection === "users" && <UsersSection data={data} busy={busy} update={update} />}
           {activeSection === "reports" && <ReportsSection data={data} busy={busy} update={update} />}
           {activeSection === "feedback" && <FeedbackSection data={data} busy={busy} update={update} />}
+          {activeSection === "earnings" && <EarningsSection data={data} />}
         </div>
       </main>
     </div>
@@ -262,6 +266,16 @@ function FeedbackSection({ data, busy, update }: { data: DashboardData; busy: bo
   return <section className="panel table-panel"><PanelHeading title="Feedback & support" description="Read what users need and track follow-up." count={`${data.feedback.length} total`} /><div className="table-wrap"><table><thead><tr><th>Type</th><th>Message</th><th>Contact</th><th>Created</th><th>Action</th></tr></thead><tbody>{data.feedback.map((item) => <tr key={item.id}><td><span className={`badge ${item.kind === "safety" ? "red" : item.kind === "bug" ? "amber" : "blue"}`}>{item.kind}</span><small>{item.status}</small></td><td><strong>{item.message}</strong>{item.page_url && <small>{item.page_url}</small>}</td><td>{item.email || "Anonymous"}</td><td>{formatDate(item.created_at)}</td><td><select value={item.status} disabled={busy} onChange={(event) => void update(`/api/admin/feedback/${item.id}`, { status: event.target.value })}><option value="open">Open</option><option value="reviewing">Reviewing</option><option value="resolved">Resolved</option><option value="dismissed">Dismissed</option></select></td></tr>)}{!data.feedback.length && <EmptyTable colSpan={5} text="No feedback yet." />}</tbody></table></div></section>;
 }
 
+function EarningsSection({ data }: { data: DashboardData }) {
+  const usersById = new Map(data.users.map((user) => [user.id, user]));
+  const topEarners = [...data.users].sort((a, b) => Number(b.total_earned) - Number(a.total_earned)).filter((user) => user.total_earned > 0);
+  return <>
+    <section className="kpi-grid earnings-kpis"><KpiCard label="Coins issued" value={data.counts.coinsIssued} hint="$1.00 per coin" icon="$" trend="Referral rewards" /><KpiCard label="Qualified referrals" value={data.counts.referrals} hint="Successful invites" icon="↗" trend="All time" /></section>
+    <section className="panel table-panel earnings-table"><PanelHeading title="Referral earnings" description="Every qualified referral creates a one-time 1 coin reward." count={`${data.referrals.length} total`} /><div className="table-wrap"><table><thead><tr><th>Referrer</th><th>Referred user</th><th>Reward</th><th>Status</th><th>Created</th></tr></thead><tbody>{data.referrals.map((referral) => <tr key={referral.id}><td><div className="table-user"><span className="table-avatar">{(usersById.get(referral.referrer_id)?.email || "U").slice(0, 1).toUpperCase()}</span><span><strong>{usersById.get(referral.referrer_id)?.email || referral.referrer_id.slice(0, 8)}</strong><small>Code: {referral.referral_code}</small></span></div></td><td>{usersById.get(referral.referred_id)?.email || referral.referred_id.slice(0, 8)}</td><td><strong>{referral.reward_coins} coin · ${referral.reward_coins}.00</strong></td><td><span className={`badge ${referral.status === "qualified" ? "green" : "muted"}`}>{referral.status}</span></td><td>{formatDate(referral.created_at)}</td></tr>)}{!data.referrals.length && <EmptyTable colSpan={5} text="No referral earnings yet." />}</tbody></table></div></section>
+    <section className="panel table-panel earnings-table"><PanelHeading title="Top earners" description="Users with the highest lifetime referral earnings." /><div className="table-wrap"><table><thead><tr><th>User</th><th>Referral code</th><th>Balance</th><th>Lifetime earned</th></tr></thead><tbody>{topEarners.map((user) => <tr key={user.id}><td><strong>{user.email || "Anonymous"}</strong></td><td><span className="mono-label">{user.referral_code || "—"}</span></td><td><strong>{user.coin_balance} coin · ${user.coin_balance}.00</strong></td><td>{user.total_earned} coin · ${user.total_earned}.00</td></tr>)}{!topEarners.length && <EmptyTable colSpan={4} text="No earners yet." />}</tbody></table></div></section>
+  </>;
+}
+
 function KpiCard({ label, value, hint, icon, trend, danger = false }: { label: string; value: number; hint: string; icon: string; trend: string; danger?: boolean }) {
   return <div className={`kpi-card ${danger ? "kpi-danger" : ""}`}><div className="kpi-top"><span>{label}</span><span className="kpi-icon">{icon}</span></div><div className="kpi-value-row"><strong>{value}</strong><span className="kpi-trend">{trend}</span></div><small>{hint}</small></div>;
 }
@@ -300,6 +314,7 @@ function sectionDescription(section: Section) {
   if (section === "users") return "Review profiles, account status, and access controls.";
   if (section === "reports") return "Keep conversations safe by reviewing user reports.";
   if (section === "feedback") return "Listen to users and track product issues.";
+  if (section === "earnings") return "Monitor referral growth, coin balances, and rewards issued.";
   return "A live view of your users, safety queue, and product signals.";
 }
 

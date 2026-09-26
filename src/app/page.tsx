@@ -408,6 +408,17 @@ export default function Home() {
           </div>
         </section>
 
+        {/* ---------------- REFERRALS ---------------- */}
+        <section id="earn" className="scroll-mt-20 border-t border-white/10 py-20 md:py-28">
+          <div className="container-page grid gap-10 rounded-3xl border border-indigo-400/20 bg-gradient-to-br from-indigo-500/10 via-white/[0.02] to-transparent p-8 md:grid-cols-[1fr_auto] md:items-center md:p-12">
+            <div>
+              <SectionHeading align="left" eyebrow="Referral rewards" title="Invite friends. Earn real value." subtitle="Create your free account, share your personal invite link, and earn 1 Omegley coin — worth $1 — for every successful referral." />
+              <p className="mt-4 text-sm text-neutral-500">Your balance and referral history are always visible from your account. No hidden tiers or confusing points system.</p>
+            </div>
+            <Link href="/account" className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-6 py-3.5 text-sm font-semibold text-neutral-950 transition hover:bg-neutral-200">Create your invite link <ArrowRight className="h-4 w-4" /></Link>
+          </div>
+        </section>
+
         {/* ---------------- FAQ ---------------- */}
         <section id="faq" className="scroll-mt-20 border-t border-white/10 py-20 md:py-28">
           <div className="container-page">
