@@ -163,6 +163,8 @@ export function useWebRTC() {
           }
           await supabase.rpc("reward_anonymous_connection", { p_wallet_id: walletId, p_event_key: eventKey });
         }
+      } catch {
+        // Rewards are best-effort; the connection lifecycle must never be blocked by wallet storage.
       }
     })();
   }, []);
