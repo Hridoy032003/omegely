@@ -71,7 +71,16 @@ export default function AccountPanel() {
       if (session?.user) void loadProfile(session.user);
       else { setProfile(EMPTY_PROFILE); setTransactions([]); }
     });
-    return () => data.subscription.unsubscribe();
+    const refreshOnFocus = () => {
+      void supabase.auth.getUser().then(({ data: current }) => {
+        if (current.user) void loadProfile(current.user);
+      });
+    };
+    window.addEventListener("focus", refreshOnFocus);
+    return () => {
+      data.subscription.unsubscribe();
+      window.removeEventListener("focus", refreshOnFocus);
+    };
   }, []);
 
   const loadProfile = async (currentUser: User) => {
@@ -81,14 +90,17 @@ export default function AccountPanel() {
       .select("display_name, avatar_url, bio, interests, profile_visibility, referral_code, coin_balance, total_earned")
       .eq("id", currentUser.id)
       .maybeSingle();
+    const fallbackReferralCode = data?.referral_code || currentUser.id.replaceAll("-", "").slice(0, 10);
     const nextProfile: Profile = {
       ...EMPTY_PROFILE,
       ...(data ?? {}),
       display_name: data?.display_name || google.name,
       avatar_url: google.avatar || data?.avatar_url || "",
       profile_visibility: data?.profile_visibility === "public" ? "public" as const : "private" as const,
+      referral_code: fallbackReferralCode,
     };
     setProfile(nextProfile);
+    if (!data?.referral_code) void supabase.from("profiles").update({ referral_code: fallbackReferralCode }).eq("id", currentUser.id);
     const { data: transactionData } = await supabase.from("coin_transactions").select("id, amount, description, created_at").eq("user_id", currentUser.id).order("created_at", { ascending: false }).limit(5);
     setTransactions(transactionData ?? []);
 
@@ -187,7 +199,7 @@ export default function AccountPanel() {
             </section>
 
             <aside className="account-sidebar-content">
-              <section id="earnings" className="account-earnings-card"><div className="account-earnings-heading"><div><p className="account-eyebrow">REFERRAL REWARDS</p><h2>Earn with Omegley</h2></div><span className="coin-symbol">$</span></div><p>Invite a friend. When they create an account, you earn 1 coin worth $1.</p><div className="coin-balance"><strong>{profile.coin_balance}</strong><span>coins · ${profile.coin_balance}.00</span></div><div className="referral-share"><input readOnly value={`https://www.omegley.in/account?ref=${profile.referral_code || ""}`} /><button type="button" onClick={() => { if (!profile.referral_code) return; void navigator.clipboard.writeText(`${window.location.origin}/account?ref=${profile.referral_code}`).then(() => { setReferralCopied(true); window.setTimeout(() => setReferralCopied(false), 1800); }); }}>{referralCopied ? "Copied" : "Copy link"}</button></div><small className="earnings-note">Lifetime earned: {profile.total_earned} coin · ${profile.total_earned}.00</small>{transactions.length > 0 && <div className="earnings-history"><strong>Recent earnings</strong>{transactions.slice(0, 3).map((transaction) => <div key={transaction.id}><span>{transaction.description}</span><b>+{transaction.amount} coin</b></div>)}</div>}</section>
+              <section id="earnings" className="account-earnings-card"><div className="account-earnings-heading"><div><p className="account-eyebrow">REFERRAL REWARDS</p><h2>Earn with Omegley</h2></div><span className="coin-symbol">$</span></div><p>Invite a friend. When they create an account, you earn 1 coin worth $1.</p><div className="coin-balance"><strong>{profile.coin_balance}</strong><span>coins · ${profile.coin_balance}.00</span></div><div className="referral-share"><input readOnly value={`https://www.omegley.in/account?ref=${profile.referral_code || ""}`} /><button type="button" onClick={() => { if (!profile.referral_code) return; void navigator.clipboard.writeText(`${window.location.origin}/account?ref=${profile.referral_code}`).then(() => { setReferralCopied(true); window.setTimeout(() => setReferralCopied(false), 1800); }); }}>{referralCopied ? "Copied" : "Copy link"}</button></div><span className="copy-status" aria-live="polite">{referralCopied ? "Copied to clipboard" : "Share this link with a friend"}</span><small className="earnings-note">Lifetime earned: {profile.total_earned} coin · ${profile.total_earned}.00</small>{transactions.length > 0 && <div className="earnings-history"><strong>Recent earnings</strong>{transactions.slice(0, 3).map((transaction) => <div key={transaction.id}><span>{transaction.description}</span><b>+{transaction.amount} coin</b></div>)}</div>}</section>
               <section className="account-info-section"><p className="account-eyebrow">ACCOUNT</p><h2>Account details</h2><div className="account-info-row"><span>Email</span><strong>{user.email}</strong></div><div className="account-info-row"><span>Sign-in method</span><strong>{provider}</strong></div><div className="account-info-row"><span>Member since</span><strong>{formatMemberDate(user.created_at)}</strong></div></section>
               <section className="account-info-section account-privacy-note"><p className="account-eyebrow">YOUR PRIVACY</p><h2>Stay in control</h2><p>Your account is optional. You can still use random chat without signing in. Profile details are only used to improve your experience.</p><Link href="/privacy">Read our privacy policy →</Link></section>
             </aside>
