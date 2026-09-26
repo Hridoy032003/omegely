@@ -133,7 +133,9 @@ h3 {
 /* ------------------------------------------------------------------- layout */
 .app {
   display: flex;
-  min-height: 100vh;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
   background:
     radial-gradient(circle at 62% -18%, color-mix(in oklab, var(--brand) 14%, transparent), transparent 36rem),
     var(--canvas);
@@ -143,6 +145,8 @@ h3 {
   display: flex;
   flex: 0 0 256px;
   width: 256px;
+  height: 100%;
+  overflow-y: auto;
   flex-direction: column;
   gap: 28px;
   border-right: 1px solid var(--line);
@@ -287,24 +291,36 @@ h3 {
 
 .main {
   display: flex;
+  height: 100%;
   min-width: 0;
+  min-height: 0;
   flex: 1;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .topbar {
-  position: sticky;
-  top: 0;
+  position: relative;
   z-index: 20;
   display: flex;
+  flex: 0 0 64px;
   min-height: 64px;
   align-items: center;
   justify-content: space-between;
   gap: 20px;
   border-bottom: 1px solid var(--line);
-  background: color-mix(in oklab, var(--canvas) 85%, transparent);
+  background: var(--canvas);
   padding: 0 clamp(16px, 3vw, 40px);
   backdrop-filter: blur(16px);
+}
+
+.content-scroll {
+  min-height: 0;
+  flex: 1;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .crumbs {
@@ -452,6 +468,19 @@ h3 {
 
 .grid--thirds {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.credit-form {
+  display: grid;
+  grid-template-columns: minmax(230px, 1.2fr) minmax(160px, .75fr) minmax(230px, 1.2fr) auto;
+  align-items: end;
+  gap: 16px;
+}
+
+.credit-form > .btn {
+  min-height: 42px;
+  padding-inline: 22px;
+  white-space: nowrap;
 }
 
 /* ---------------------------------------------------------------------- KPI */
@@ -1169,6 +1198,12 @@ td.empty-cell {
   .grid--thirds {
     grid-template-columns: 1fr;
   }
+  .credit-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .credit-form > .btn {
+    grid-column: 1 / -1;
+  }
 }
 
 @media (max-width: 860px) {
@@ -1219,6 +1254,13 @@ td.empty-cell {
   .page-head {
     align-items: flex-start;
     flex-direction: column;
+  }
+  .credit-form {
+    grid-template-columns: 1fr;
+  }
+  .credit-form > .btn {
+    grid-column: auto;
+    width: 100%;
   }
   .head-actions {
     width: 100%;

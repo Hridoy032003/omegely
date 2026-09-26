@@ -221,7 +221,7 @@ function CreditForm() {
   return (
     <Panel>
       <PanelHead title="Issue bonus coins" description="Credit a user with a labeled admin adjustment." />
-      <form onSubmit={submit} className="panel-body grid grid--thirds" style={{ alignItems: "end" }}>
+      <form onSubmit={submit} className="panel-body credit-form">
         <div className="field">
           <label htmlFor="credit-user">User</label>
           <select

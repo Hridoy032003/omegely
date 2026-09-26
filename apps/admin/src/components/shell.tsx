@@ -148,27 +148,29 @@ function Chrome({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        <div className="content">
-          {message && (
-            <p className={`notice notice--${message.tone === "error" ? "error" : "success"}`} role="status">
-              {message.text}
-            </p>
-          )}
+        <div className="content-scroll">
+          <div className="content">
+            {message && (
+              <p className={`notice notice--${message.tone === "error" ? "error" : "success"}`} role="status">
+                {message.text}
+              </p>
+            )}
 
-          <div className="page-head">
-            <div>
-              <p className="eyebrow">Omegley operations</p>
-              <h1>{active.label}</h1>
-              <p className="lede">{DESCRIPTIONS[active.href]}</p>
+            <div className="page-head">
+              <div>
+                <p className="eyebrow">Omegley operations</p>
+                <h1>{active.label}</h1>
+                <p className="lede">{DESCRIPTIONS[active.href]}</p>
+              </div>
+              <div className="head-actions">
+                <button type="button" className="btn btn--primary" disabled={busy} onClick={() => void refresh()}>
+                  {busy ? "Refreshing…" : "Refresh data"}
+                </button>
+              </div>
             </div>
-            <div className="head-actions">
-              <button type="button" className="btn btn--primary" disabled={busy} onClick={() => void refresh()}>
-                {busy ? "Refreshing…" : "Refresh data"}
-              </button>
-            </div>
+
+            {children}
           </div>
-
-          {children}
         </div>
       </main>
     </div>
