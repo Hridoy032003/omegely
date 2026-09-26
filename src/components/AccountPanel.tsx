@@ -60,6 +60,7 @@ export default function AccountPanel() {
 
   useEffect(() => {
     const referralCode = new URLSearchParams(window.location.search).get("ref");
+    if (new URLSearchParams(window.location.search).get("mode") === "signup") setMode("signup");
     if (referralCode) window.localStorage.setItem("omegley_referral_code", referralCode.toLowerCase());
     void supabase.auth.getUser().then(({ data }) => {
       setUser(data.user ?? null);

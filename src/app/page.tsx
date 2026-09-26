@@ -23,7 +23,7 @@ const STATS = [
   { value: "0", label: "Sign-ups required" },
   { value: "<3s", label: "Time to first match" },
   { value: "100%", label: "Peer-to-peer" },
-  { value: "$0", label: "Forever free" },
+  { value: "1 = $1", label: "Referral coin value" },
 ];
 
 const FEATURES = [
@@ -154,7 +154,7 @@ export default function Home() {
             <div className="animate-fadeUp">
               <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-neutral-300">
                 <Sparkles className="h-3.5 w-3.5 text-indigo-300" />
-                No sign-up · Browser or installable app · Free forever
+                No sign-up to chat · Referral rewards · 1 coin = $1
               </span>
 
               <h1 className="mt-6 font-display text-4xl font-extrabold leading-[1.05] tracking-tight text-white sm:text-5xl lg:text-6xl">
@@ -166,7 +166,7 @@ export default function Home() {
               <p className="mt-6 max-w-xl text-lg leading-relaxed text-neutral-300">
                 Omegley helps you talk to strangers online through free,
                 anonymous 1-to-1 video, voice, and text chat. Meet someone new
-                anywhere in the world—no signup, no download, and no history.
+                anywhere in the world—no signup, no download, and no history. Create an account when you want to earn $1 for every successful referral.
               </p>
 
               <div className="mt-9 flex flex-col gap-3 sm:flex-row">
@@ -440,7 +440,7 @@ export default function Home() {
                 Someone interesting is online right now.
               </h2>
               <p className="mx-auto mt-4 max-w-xl text-neutral-300">
-                No sign-up. No downloads. Just press start and say hello.
+                Chat for free, or create an account and earn 1 coin worth $1 for every successful referral.
               </p>
               <Link
                 href="/chat"
