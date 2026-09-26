@@ -89,15 +89,22 @@ export default function UserAccountBadge({ compact = false }: { compact?: boolea
 
   return (
     <div className="inline-flex items-center gap-1.5">
-      <Link
-        href="/wallet"
-        title="100 coins = 1 dollar. Open your wallet."
-        aria-label={`${account.availableCoins.toLocaleString()} coins. 100 coins = 1 dollar. Open your wallet.`}
-        className="inline-flex items-center gap-1.5 rounded-full border border-positive/25 bg-positive/10 px-2.5 py-1.5 text-2xs font-semibold text-positive transition hover:border-positive/50 hover:bg-positive/20"
-      >
-        {account.availableCoins.toLocaleString()}
-        <span className="hidden sm:inline">coins</span>
-      </Link>
+      <span className="group relative inline-flex">
+        <Link
+          href="/wallet"
+          aria-label={`${account.availableCoins.toLocaleString()} coins. 100 coins = 1 dollar. Open your wallet.`}
+          className="inline-flex items-center gap-1.5 rounded-full border border-positive/25 bg-positive/10 px-2.5 py-1.5 text-2xs font-semibold text-positive transition hover:border-positive/50 hover:bg-positive/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-positive/60"
+        >
+          {account.availableCoins.toLocaleString()}
+          <span className="hidden sm:inline">coins</span>
+        </Link>
+        <span
+          role="tooltip"
+          className="pointer-events-none invisible absolute right-0 top-full z-50 mt-2 w-max max-w-64 translate-y-1 rounded-lg border border-white/10 bg-[#111118] px-3 py-2 text-xs font-medium leading-5 text-white opacity-0 shadow-2xl shadow-black/40 transition duration-150 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:visible group-focus-within:translate-y-0 group-focus-within:opacity-100"
+        >
+          100 coins = 1 dollar. Open your wallet.
+        </span>
+      </span>
 
       <Link
         href="/account"

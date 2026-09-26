@@ -200,6 +200,7 @@ export default function WalletPanel() {
   const [complaintSubject, setComplaintSubject] = useState("");
   const [complaintMessage, setComplaintMessage] = useState("");
   const [complaintBusy, setComplaintBusy] = useState(false);
+  const [reconcileBusy, setReconcileBusy] = useState(false);
 
   const loadWallet = useCallback(async (currentUser: User) => {
     // This is deliberately a narrow heartbeat used only for referral
@@ -376,6 +377,33 @@ export default function WalletPanel() {
     document.body.appendChild(script);
   });
 
+  const reconcilePayments = async (silent = false) => {
+    if (!user || reconcileBusy) return;
+    setReconcileBusy(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const response = await fetch("/api/payments/razorpay/reconcile", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${sessionData.session?.access_token || ""}` },
+      });
+      const result = (await response.json().catch(() => ({}))) as { error?: string; credited?: number };
+      if (!response.ok) throw new Error(result.error || "Payment status could not be checked.");
+      await loadWallet(user);
+      if (!silent) {
+        setNotice({
+          tone: result.credited ? "success" : "error",
+          text: result.credited
+            ? "Your payment was confirmed and the coins are now in your wallet."
+            : "No pending captured payment was found yet. If you were charged, please try again in a moment.",
+        });
+      }
+    } catch (error) {
+      if (!silent) setNotice({ tone: "error", text: error instanceof Error ? error.message : "Payment status could not be checked." });
+    } finally {
+      setReconcileBusy(false);
+    }
+  };
+
   const purchaseCoins = async (pack: CoinPack) => {
     if (!user || purchaseBusy) return;
     setPurchaseBusy(pack.id);
@@ -420,8 +448,8 @@ export default function WalletPanel() {
             setNotice({ tone: "success", text: `${formatCoins(pack.coins)} coins were added to your wallet.` });
             await loadWallet(user);
             setActiveTab("earn");
-          } catch (error) {
-            setNotice({ tone: "error", text: error instanceof Error ? error.message : "Payment verification failed. The payment will be reconciled by webhook." });
+          } catch {
+            await reconcilePayments();
           } finally {
             setPurchaseBusy(null);
           }
@@ -645,7 +673,12 @@ export default function WalletPanel() {
 
         <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(300px,1fr)]" role="tabpanel">
           {activeTab === "buy" ? (
-            <BuyCoinsPanel busy={purchaseBusy} onPurchase={(pack) => void purchaseCoins(pack)} />
+            <BuyCoinsPanel
+              busy={purchaseBusy}
+              reconcileBusy={reconcileBusy}
+              onPurchase={(pack) => void purchaseCoins(pack)}
+              onReconcile={() => void reconcilePayments()}
+            />
           ) : activeTab === "earn" ? (
             <>
               <Panel className="p-6 sm:p-7">
@@ -912,7 +945,17 @@ function EarnRow({
   );
 }
 
-function BuyCoinsPanel({ busy, onPurchase }: { busy: string | null; onPurchase: (pack: CoinPack) => void }) {
+function BuyCoinsPanel({
+  busy,
+  reconcileBusy,
+  onPurchase,
+  onReconcile,
+}: {
+  busy: string | null;
+  reconcileBusy: boolean;
+  onPurchase: (pack: CoinPack) => void;
+  onReconcile: () => void;
+}) {
   return (
     <Panel className="p-6 sm:p-7 lg:col-span-2">
       <PanelHead
@@ -935,7 +978,12 @@ function BuyCoinsPanel({ busy, onPurchase }: { busy: string | null; onPurchase: 
           </article>
         ))}
       </div>
-      <p className="mt-6 text-xs leading-relaxed text-ink-4">Razorpay payments are processed in INR. Omegley coins remain the wallet unit, and 100 coins = 1 dollar for reward-value display.</p>
+      <div className="mt-6 flex flex-col gap-3 border-t border-line pt-5 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-xs leading-relaxed text-ink-4">Razorpay payments are processed in INR. Omegley coins remain the wallet unit, and 100 coins = 1 dollar for reward-value display.</p>
+        <button type="button" onClick={onReconcile} disabled={busy !== null || reconcileBusy} className={buttonClass({ variant: "ghost", size: "sm" })}>
+          {reconcileBusy ? "Checking…" : "Check payment status"}
+        </button>
+      </div>
     </Panel>
   );
 }
