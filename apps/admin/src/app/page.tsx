@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase-browser";
 
-type Section = "dashboard" | "users" | "reports" | "feedback" | "earnings";
+type Section = "dashboard" | "users" | "reports" | "feedback" | "earnings" | "settings";
 
 type DashboardData = {
   counts: { users: number; banned: number; reports: number; openReports: number; feedback: number; openFeedback: number; referrals: number; coinsIssued: number };
@@ -31,6 +31,7 @@ const NAV_ITEMS: Array<{ id: Section; label: string; icon: string }> = [
   { id: "reports", label: "Safety reports", icon: "!" },
   { id: "feedback", label: "Feedback", icon: "✦" },
   { id: "earnings", label: "Earnings", icon: "$" },
+  { id: "settings", label: "Settings", icon: "⚙" },
 ];
 
 type UpdateAction = (path: string, body: Record<string, unknown>) => Promise<void>;
@@ -194,6 +195,7 @@ export default function AdminPage({ initialSection = "dashboard" }: { initialSec
           {activeSection === "reports" && <ReportsSection data={data} busy={busy} update={update} />}
           {activeSection === "feedback" && <FeedbackSection data={data} busy={busy} update={update} />}
           {activeSection === "earnings" && <EarningsSection data={data} session={session} />}
+          {activeSection === "settings" && <SettingsSection session={session} />}
         </div>
       </main>
     </div>
@@ -302,6 +304,19 @@ function updateWithdrawal(id: string, status: string, accessToken: string) {
   return fetch(`/api/admin/withdrawals/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` }, body: JSON.stringify({ status }) }).then(() => window.location.reload());
 }
 
+function SettingsSection({ session }: { session: Session }) {
+  const [settings, setSettings] = useState({ withdrawals_enabled: true, withdrawal_minimum_coins: 5000, connection_rewards_enabled: true, referral_rewards_enabled: true });
+  const [busy, setBusy] = useState(true);
+  const [message, setMessage] = useState("");
+  useEffect(() => { void fetch("/api/admin/settings", { headers: { Authorization: `Bearer ${session.access_token}` }, cache: "no-store" }).then(async (response) => { if (!response.ok) throw new Error((await response.json()).error || "Could not load settings."); setSettings(await response.json()); }).catch((error: Error) => setMessage(error.message)).finally(() => setBusy(false)); }, [session.access_token]);
+  const save = async () => { setBusy(true); setMessage(""); const response = await fetch("/api/admin/settings", { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify(settings) }); setMessage(response.ok ? "Settings saved." : ((await response.json().catch(() => ({}))).error || "Could not save settings.")); setBusy(false); };
+  return <section className="settings-layout"><div className="panel settings-panel"><PanelHeading title="Global controls" description="Pause rewards or change withdrawal rules without redeploying." /><div className="settings-list"><SettingToggle label="Withdrawals enabled" description="Allow users to submit new payout requests." checked={settings.withdrawals_enabled} onChange={(checked) => setSettings({ ...settings, withdrawals_enabled: checked })} /><SettingToggle label="Connection rewards enabled" description="Issue 10 coins when a completed connection ends." checked={settings.connection_rewards_enabled} onChange={(checked) => setSettings({ ...settings, connection_rewards_enabled: checked })} /><SettingToggle label="Referral rewards enabled" description="Issue 100 coins for each qualified referral." checked={settings.referral_rewards_enabled} onChange={(checked) => setSettings({ ...settings, referral_rewards_enabled: checked })} /></div></div><div className="panel settings-panel"><PanelHeading title="Withdrawal policy" description="Users must reach this amount before requesting a payout." /><div className="settings-form"><label>Minimum withdrawal coins<input type="number" min="100" step="100" value={settings.withdrawal_minimum_coins} onChange={(event) => setSettings({ ...settings, withdrawal_minimum_coins: Number(event.target.value) })} /></label><div className="settings-value">Current threshold <strong>{settings.withdrawal_minimum_coins.toLocaleString()} coins · ${(settings.withdrawal_minimum_coins / 100).toFixed(2)}</strong></div><button type="button" className="primary-button" disabled={busy} onClick={() => void save()}>{busy ? "Saving…" : "Save settings"}</button>{message && <p className="settings-message">{message}</p>}</div></div></section>;
+}
+
+function SettingToggle({ label, description, checked, onChange }: { label: string; description: string; checked: boolean; onChange: (checked: boolean) => void }) {
+  return <label className="setting-toggle"><span><strong>{label}</strong><small>{description}</small></span><input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} /><i aria-hidden="true" /></label>;
+}
+
 function KpiCard({ label, value, hint, icon, trend, danger = false }: { label: string; value: number; hint: string; icon: string; trend: string; danger?: boolean }) {
   return <div className={`kpi-card ${danger ? "kpi-danger" : ""}`}><div className="kpi-top"><span>{label}</span><span className="kpi-icon">{icon}</span></div><div className="kpi-value-row"><strong>{value}</strong><span className="kpi-trend">{trend}</span></div><small>{hint}</small></div>;
 }
@@ -341,6 +356,7 @@ function sectionDescription(section: Section) {
   if (section === "reports") return "Keep conversations safe by reviewing user reports.";
   if (section === "feedback") return "Listen to users and track product issues.";
   if (section === "earnings") return "Monitor referral growth, coin balances, and rewards issued.";
+  if (section === "settings") return "Manage global rewards, withdrawals, and payout rules.";
   return "A live view of your users, safety queue, and product signals.";
 }
 

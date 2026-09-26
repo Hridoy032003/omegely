@@ -141,6 +141,25 @@ td small { max-width: 310px; overflow: hidden; margin-top: 5px; color: var(--sub
 .admin-credit-panel { margin-top: 14px; }
 .admin-credit-form { display: grid; grid-template-columns: 1.2fr .5fr 1.4fr auto auto; align-items: center; gap: 8px; padding: 16px 21px; }
 .admin-credit-form input, .admin-credit-form select { min-width: 0; border: 1px solid #353a48; border-radius: 7px; background: #1a1d26; color: #e5e7eb; padding: 9px 10px; font-size: 12px; }
+.settings-layout { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(320px, .85fr); gap: 14px; }
+.settings-panel { min-width: 0; }
+.settings-list { padding: 6px 21px 10px; }
+.setting-toggle { display: flex; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--line-soft); padding: 18px 0; cursor: pointer; }
+.setting-toggle:last-child { border-bottom: 0; }
+.setting-toggle > span { display: grid; gap: 5px; }
+.setting-toggle strong { color: #e7e9ef; font-size: 14px; font-weight: 600; }
+.setting-toggle small { color: #858d9d; font-size: 12px; }
+.setting-toggle input { position: absolute; opacity: 0; pointer-events: none; }
+.setting-toggle i { position: relative; width: 42px; height: 24px; flex: 0 0 42px; border-radius: 999px; background: #303441; transition: .18s ease; }
+.setting-toggle i::after { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #aeb3bf; content: ""; transition: .18s ease; }
+.setting-toggle input:checked + i { background: var(--purple); }
+.setting-toggle input:checked + i::after { transform: translateX(18px); background: white; }
+.settings-form { display: grid; gap: 14px; padding: 21px; }
+.settings-form label { display: grid; gap: 8px; color: #b6bbc7; font-size: 13px; font-weight: 600; }
+.settings-form input { border: 1px solid #353a48; border-radius: 8px; background: #1a1d26; color: white; padding: 11px 12px; font-size: 14px; }
+.settings-value { display: grid; gap: 4px; color: #858d9d; font-size: 12px; }
+.settings-value strong { color: #e5e7eb; font-size: 14px; }
+.settings-message { margin: 0; color: #8fe4b8; font-size: 12px; }
 .empty-table { height: 145px; color: var(--subtle); text-align: center; }
 .empty-state { display: grid; place-items: center; padding: 38px 20px; text-align: center; }
 .empty-state-icon { display: grid; width: 35px; height: 35px; place-items: center; border-radius: 11px; background: rgba(124,108,255,.1); color: #a69cff; font-size: 20px; }
@@ -197,3 +216,4 @@ td small { color: #858d9d; font-size: 11px; }
 @media (max-width: 720px) { .admin-sidebar { width: 61px; flex-basis: 61px; align-items: center; padding: 19px 8px; } .admin-brand > span:last-child, .workspace-label, .sidebar-link > span:not(.sidebar-icon), .sidebar-link em, .system-status, .sidebar-signout span { display: none; } .sidebar-nav { width: 100%; margin-top: 45px; } .sidebar-link { justify-content: center; padding: 12px 0; } .sidebar-link.active { box-shadow: inset 3px 0 0 var(--purple); } .sidebar-icon { font-size: 18px; } .sidebar-bottom { width: 100%; padding: 15px 0 0; } .sidebar-signout { justify-content: center; } .admin-topbar { min-height: 64px; padding: 0 16px; } .mobile-brand { display: grid; } .admin-identity > span:last-child { display: none; } .admin-identity { border-left: 0; padding-left: 4px; } .admin-content { padding: 28px 16px 48px; } .page-heading { align-items: start; flex-direction: column; margin-bottom: 24px; } .heading-actions { width: 100%; justify-content: space-between; } .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; } .kpi-card { min-height: 122px; padding: 14px; } .kpi-card strong { margin-top: 12px; font-size: 26px; } .quick-grid { grid-template-columns: 1fr; } .panel-heading { padding: 16px; } .activity-list { padding-right: 16px; padding-left: 16px; } }
 @media (max-width: 430px) { .last-updated { display: none; } .kpi-top span:first-child { max-width: 80px; } .kpi-card small { font-size: 10px; } .login-card { padding: 26px 21px; } .login-card .admin-brand { margin-bottom: 45px; } }
 @media (max-width: 720px) { .admin-credit-form { grid-template-columns: 1fr; padding: 16px; } }
+@media (max-width: 900px) { .settings-layout { grid-template-columns: 1fr; } }
