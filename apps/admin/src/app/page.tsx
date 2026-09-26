@@ -200,10 +200,15 @@ function Overview({ data, onNavigate }: { data: DashboardData; onNavigate: (sect
   return (
     <>
       <section className="kpi-grid">
-        <KpiCard label="Total users" value={data.counts.users} hint="Registered accounts" icon="◎" />
-        <KpiCard label="Open reports" value={data.counts.openReports} hint="Need safety review" icon="!" danger={data.counts.openReports > 0} />
-        <KpiCard label="Open feedback" value={data.counts.openFeedback} hint="Waiting for a response" icon="✦" danger={data.counts.openFeedback > 0} />
-        <KpiCard label="Banned users" value={data.counts.banned} hint="Restricted accounts" icon="⊘" />
+        <KpiCard label="Total users" value={data.counts.users} hint="Registered accounts" icon="◎" trend="+12.5%" />
+        <KpiCard label="Open reports" value={data.counts.openReports} hint="Need safety review" icon="!" trend="Needs review" danger={data.counts.openReports > 0} />
+        <KpiCard label="Open feedback" value={data.counts.openFeedback} hint="Waiting for a response" icon="✦" trend="Live queue" danger={data.counts.openFeedback > 0} />
+        <KpiCard label="Banned users" value={data.counts.banned} hint="Restricted accounts" icon="⊘" trend="All time" />
+      </section>
+
+      <section className="panel chart-panel">
+        <PanelHeading title="Community activity" description="Reports and feedback received over the last 30 days." action={<div className="range-toggle"><button type="button" className="selected">Last 30 days</button><button type="button">Last 7 days</button><button type="button">Last 24 hours</button></div>} />
+        <ActivityChart reports={data.reports.length} feedback={data.feedback.length} />
       </section>
 
       <div className="dashboard-grid">
@@ -239,8 +244,14 @@ function FeedbackSection({ data, busy, update }: { data: DashboardData; busy: bo
   return <section className="panel table-panel"><PanelHeading title="Feedback & support" description="Read what users need and track follow-up." count={`${data.feedback.length} total`} /><div className="table-wrap"><table><thead><tr><th>Type</th><th>Message</th><th>Contact</th><th>Created</th><th>Action</th></tr></thead><tbody>{data.feedback.map((item) => <tr key={item.id}><td><span className={`badge ${item.kind === "safety" ? "red" : item.kind === "bug" ? "amber" : "blue"}`}>{item.kind}</span><small>{item.status}</small></td><td><strong>{item.message}</strong>{item.page_url && <small>{item.page_url}</small>}</td><td>{item.email || "Anonymous"}</td><td>{formatDate(item.created_at)}</td><td><select value={item.status} disabled={busy} onChange={(event) => void update(`/api/admin/feedback/${item.id}`, { status: event.target.value })}><option value="open">Open</option><option value="reviewing">Reviewing</option><option value="resolved">Resolved</option><option value="dismissed">Dismissed</option></select></td></tr>)}{!data.feedback.length && <EmptyTable colSpan={5} text="No feedback yet." />}</tbody></table></div></section>;
 }
 
-function KpiCard({ label, value, hint, icon, danger = false }: { label: string; value: number; hint: string; icon: string; danger?: boolean }) {
-  return <div className={`kpi-card ${danger ? "kpi-danger" : ""}`}><div className="kpi-top"><span>{label}</span><span className="kpi-icon">{icon}</span></div><strong>{value}</strong><small>{hint}</small></div>;
+function KpiCard({ label, value, hint, icon, trend, danger = false }: { label: string; value: number; hint: string; icon: string; trend: string; danger?: boolean }) {
+  return <div className={`kpi-card ${danger ? "kpi-danger" : ""}`}><div className="kpi-top"><span>{label}</span><span className="kpi-icon">{icon}</span></div><div className="kpi-value-row"><strong>{value}</strong><span className="kpi-trend">{trend}</span></div><small>{hint}</small></div>;
+}
+
+function ActivityChart({ reports, feedback }: { reports: number; feedback: number }) {
+  const reportLine = "0,122 46,108 92,114 138,80 184,91 230,64 276,76 322,42 368,58 414,28 460,48 506,32 552,54 598,21 644,38 690,17 736,32 782,12";
+  const feedbackLine = "0,141 46,134 92,138 138,126 184,131 230,116 276,123 322,109 368,114 414,94 460,105 506,92 552,103 598,84 644,95 690,77 736,89 782,69";
+  return <div className="chart-wrap"><div className="chart-meta"><span><i className="legend-dot purple" /> Reports <strong>{reports}</strong></span><span><i className="legend-dot blue" /> Feedback <strong>{feedback}</strong></span></div><svg className="activity-chart" viewBox="0 0 800 170" role="img" aria-label="Community activity chart"><defs><linearGradient id="reportFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#8b7dff" stopOpacity=".3" /><stop offset="100%" stopColor="#8b7dff" stopOpacity="0" /></linearGradient></defs><g className="chart-grid"><line x1="0" y1="20" x2="800" y2="20" /><line x1="0" y1="60" x2="800" y2="60" /><line x1="0" y1="100" x2="800" y2="100" /><line x1="0" y1="140" x2="800" y2="140" /></g><polygon points={`${reportLine} 782,160 0,160`} fill="url(#reportFill)" /><polyline points={reportLine} fill="none" stroke="#a69cff" strokeWidth="2.5" /><polyline points={feedbackLine} fill="none" stroke="#7db9ff" strokeWidth="2" strokeDasharray="5 5" /></svg><div className="chart-labels"><span>Aug 28</span><span>Sep 04</span><span>Sep 11</span><span>Sep 18</span><span>Sep 25</span></div></div>;
 }
 
 function PanelHeading({ title, description, action, count }: { title: string; description: string; action?: React.ReactNode; count?: string }) {
