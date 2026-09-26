@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase-browser";
 
@@ -29,12 +30,13 @@ const NAV_ITEMS: Array<{ id: Section; label: string; icon: string }> = [
 
 type UpdateAction = (path: string, body: Record<string, unknown>) => Promise<void>;
 
-export default function AdminPage() {
+export default function AdminPage({ initialSection = "dashboard" }: { initialSection?: Section }) {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [session, setSession] = useState<Session | null>(null);
   const [data, setData] = useState<DashboardData>(EMPTY);
-  const [activeSection, setActiveSection] = useState<Section>("dashboard");
+  const [activeSection, setActiveSection] = useState<Section>(initialSection);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -112,6 +114,10 @@ export default function AdminPage() {
   if (!session) return <LoginScreen email={email} password={password} busy={busy} message={message} setEmail={setEmail} setPassword={setPassword} onSubmit={signIn} />;
 
   const adminName = session.user.email?.split("@")[0] || "Admin";
+  const navigateToSection = (section: Section) => {
+    setActiveSection(section);
+    router.push(sectionPath(section));
+  };
 
   return (
     <div className="admin-app">
@@ -128,7 +134,7 @@ export default function AdminPage() {
               key={item.id}
               type="button"
               className={`sidebar-link ${activeSection === item.id ? "active" : ""}`}
-              onClick={() => setActiveSection(item.id)}
+              onClick={() => navigateToSection(item.id)}
             >
               <span className="sidebar-icon">{item.icon}</span>
               <span>{item.label}</span>
@@ -160,7 +166,7 @@ export default function AdminPage() {
             <div className="heading-actions"><span className="last-updated">Live data</span><button type="button" className="primary-button" disabled={busy} onClick={() => void refresh()}>{busy ? "Refreshing…" : "Refresh data"}</button></div>
           </div>
 
-          {activeSection === "dashboard" && <Overview data={data} onNavigate={setActiveSection} />}
+          {activeSection === "dashboard" && <Overview data={data} onNavigate={navigateToSection} />}
           {activeSection === "users" && <UsersSection data={data} busy={busy} update={update} />}
           {activeSection === "reports" && <ReportsSection data={data} busy={busy} update={update} />}
           {activeSection === "feedback" && <FeedbackSection data={data} busy={busy} update={update} />}
@@ -272,6 +278,10 @@ function EmptyTable({ colSpan, text }: { colSpan: number; text: string }) {
 
 function sectionLabel(section: Section) {
   return NAV_ITEMS.find((item) => item.id === section)?.label || "Overview";
+}
+
+function sectionPath(section: Section) {
+  return section === "dashboard" ? "/dashboard" : `/${section}`;
 }
 
 function sectionDescription(section: Section) {

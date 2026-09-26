@@ -155,6 +155,33 @@ td small { max-width: 310px; overflow: hidden; margin-top: 5px; color: var(--sub
 .error { color: #ffaaaa; font-size: 12px; }
 .login-error { margin: 16px 0 0; }
 .login-footnote { margin: 25px 0 0; border-top: 1px solid var(--line-soft); padding-top: 18px; color: var(--subtle); font-size: 10px; }
+
+/* Production readability scale */
+html, body { font-size: 14px; }
+.admin-sidebar { width: 264px; flex-basis: 264px; padding: 22px 16px 18px; }
+.sidebar-link { color: #a5aab8; padding: 12px; font-size: 14px; }
+.admin-topbar { min-height: 72px; padding-right: 42px; padding-left: 42px; }
+.topbar-context { color: #8f96a6; font-size: 13px; }
+.admin-content { width: min(100%, 1500px); padding: 46px 42px 80px; }
+.eyebrow { margin-bottom: 13px; color: #a69cff; font-size: 11px; letter-spacing: .17em; }
+h1 { font-size: clamp(36px, 4vw, 48px); }
+.page-subtitle { margin-top: 13px; color: #9aa1b0; font-size: 15px; }
+.last-updated { color: #8f96a6; font-size: 13px; }
+.primary-button { padding: 11px 17px; font-size: 13px; }
+.kpi-top { color: #a1a7b5; font-size: 14px; }
+.kpi-card small { margin-top: 6px; color: #858d9d; font-size: 12px; }
+.chart-meta { color: #a1a7b5; font-size: 13px; }
+.chart-labels { color: #727b8d; font-size: 12px; }
+.panel-heading h2 { font-size: 17px; }
+.panel-heading p, .panel-count { color: #858d9d; font-size: 13px; }
+.activity-copy strong { color: #e8eaf0; font-size: 14px; }
+.activity-copy small { color: #858d9d; font-size: 12px; }
+.attention-card strong, .quick-link strong { color: #e1e4eb; font-size: 13px; }
+.attention-card small, .quick-link small { color: #858d9d; font-size: 12px; }
+th { color: #858d9d; font-size: 11px; }
+td { color: #c5c9d2; font-size: 13px; }
+td strong { font-size: 13px; }
+td small { color: #858d9d; font-size: 11px; }
 @media (max-width: 1000px) { .admin-sidebar { width: 218px; flex-basis: 218px; } .admin-topbar, .admin-content { padding-right: 26px; padding-left: 26px; } .dashboard-grid { grid-template-columns: 1fr; } }
 @media (max-width: 720px) { .admin-sidebar { width: 61px; flex-basis: 61px; align-items: center; padding: 19px 8px; } .admin-brand > span:last-child, .workspace-label, .sidebar-link > span:not(.sidebar-icon), .sidebar-link em, .system-status, .sidebar-signout span { display: none; } .sidebar-nav { width: 100%; margin-top: 45px; } .sidebar-link { justify-content: center; padding: 12px 0; } .sidebar-link.active { box-shadow: inset 3px 0 0 var(--purple); } .sidebar-icon { font-size: 18px; } .sidebar-bottom { width: 100%; padding: 15px 0 0; } .sidebar-signout { justify-content: center; } .admin-topbar { min-height: 64px; padding: 0 16px; } .mobile-brand { display: grid; } .admin-identity > span:last-child { display: none; } .admin-identity { border-left: 0; padding-left: 4px; } .admin-content { padding: 28px 16px 48px; } .page-heading { align-items: start; flex-direction: column; margin-bottom: 24px; } .heading-actions { width: 100%; justify-content: space-between; } .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; } .kpi-card { min-height: 122px; padding: 14px; } .kpi-card strong { margin-top: 12px; font-size: 26px; } .quick-grid { grid-template-columns: 1fr; } .panel-heading { padding: 16px; } .activity-list { padding-right: 16px; padding-left: 16px; } }
 @media (max-width: 430px) { .last-updated { display: none; } .kpi-top span:first-child { max-width: 80px; } .kpi-card small { font-size: 10px; } .login-card { padding: 26px 21px; } .login-card .admin-brand { margin-bottom: 45px; } }
