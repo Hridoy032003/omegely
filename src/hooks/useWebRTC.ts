@@ -166,14 +166,16 @@ export function useWebRTC() {
       try {
         const { data: auth } = await supabase.auth.getUser();
         if (auth.user) {
-          await supabase.rpc("reward_authenticated_connection", { p_event_key: eventKey });
+          const { data: balance } = await supabase.rpc("reward_authenticated_connection", { p_event_key: eventKey });
+          if (Number(balance ?? 0) > 0) window.dispatchEvent(new Event("omegley:wallet-updated"));
         } else {
           let walletId = window.localStorage.getItem("omegley_anonymous_wallet");
           if (!walletId) {
             walletId = crypto.randomUUID();
             window.localStorage.setItem("omegley_anonymous_wallet", walletId);
           }
-          await supabase.rpc("reward_anonymous_connection", { p_wallet_id: walletId, p_event_key: eventKey });
+          const { data: balance } = await supabase.rpc("reward_anonymous_connection", { p_wallet_id: walletId, p_event_key: eventKey });
+          if (Number(balance ?? 0) > 0) window.dispatchEvent(new Event("omegley:wallet-updated"));
         }
       } catch {
         // Rewards are best-effort; the connection lifecycle must never be blocked by wallet storage.

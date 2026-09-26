@@ -35,6 +35,26 @@ export type DashboardData = {
     coin_balance: number;
     total_earned: number;
   }>;
+  recentEarnings: Array<{
+    id: string;
+    user_id: string;
+    display_name: string | null;
+    email: string | null;
+    type: string;
+    amount: number;
+    balance_after: number;
+    description: string;
+    created_at: string;
+  }>;
+  anonymousWallets: Array<{
+    id: string;
+    wallet_label: string;
+    coin_balance: number;
+    total_earned: number;
+    claimed: boolean;
+    created_at: string;
+    last_earned_at: string | null;
+  }>;
   reports: Array<{
     id: string;
     reporter_id: string | null;
@@ -102,6 +122,8 @@ export const EMPTY_DATA: DashboardData = {
     coinsIssued: 0,
   },
   users: [],
+  recentEarnings: [],
+  anonymousWallets: [],
   reports: [],
   feedback: [],
   referrals: [],

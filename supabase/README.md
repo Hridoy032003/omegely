@@ -15,5 +15,7 @@ For Razorpay coin purchases, also apply `0011_razorpay_coin_purchases.sql` and
 set `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, and
 `NEXT_PUBLIC_RAZORPAY_KEY_ID` in the public app's server environment. Configure
 the Razorpay webhook URL as `/api/payments/razorpay/webhook` for
-`payment.captured`, `order.paid`, and `payment.failed` events. Use test-mode
-keys first; the initial packs are defined in `src/lib/coin-packs.ts`.
+`payment.captured`, `order.paid`, and `payment.failed` events. Apply
+`0012_anonymous_wallet_visibility.sql` as well so anonymous balances can be
+shown in chat and claimed after sign-in. Use test-mode keys first; the initial
+packs are defined in `src/lib/coin-packs.ts`.

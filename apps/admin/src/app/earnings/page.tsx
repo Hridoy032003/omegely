@@ -96,13 +96,14 @@ export default function EarningsPage() {
       <Panel>
         <PanelHead
           title="Top earners"
-          description="Users with the highest lifetime referral and connection earnings."
+          description="Users with the highest lifetime referral, connection, and purchase earnings."
         />
         <Table head={["User", "Referral code", "Balance", "Lifetime earned"]}>
           {topEarners.map((user) => (
             <tr key={user.id}>
               <td>
-                <span className="cell-title">{user.email || "Anonymous"}</span>
+                <span className="cell-title">{user.display_name || user.email || "Anonymous account"}</span>
+                {user.display_name && <span className="cell-sub">{user.email || user.id.slice(0, 8)}</span>}
               </td>
               <td className="mono">{user.referral_code || "—"}</td>
               <td className="mono">
@@ -114,6 +115,52 @@ export default function EarningsPage() {
             </tr>
           ))}
           {!topEarners.length && <EmptyRow colSpan={4} text="No earners yet." />}
+        </Table>
+      </Panel>
+
+      <Panel>
+        <PanelHead
+          title="Recent coin earnings"
+          description="The ledger records the account name, event type, amount, and resulting balance."
+          action={<span className="muted">{data.recentEarnings.length} shown</span>}
+        />
+        <Table head={["User", "Event", "Amount", "Balance after", "Created"]}>
+          {data.recentEarnings.map((entry) => (
+            <tr key={entry.id}>
+              <td>
+                <span className="cell-title">{entry.display_name || entry.email || "Account"}</span>
+                <span className="cell-sub">{entry.email || entry.user_id.slice(0, 8)}</span>
+              </td>
+              <td>
+                <span className="cell-title">{entry.type.replaceAll("_", " ")}</span>
+                <span className="cell-sub">{entry.description}</span>
+              </td>
+              <td className="mono">{entry.amount > 0 ? "+" : ""}{formatCoins(entry.amount)} coins</td>
+              <td className="mono">{formatCoins(entry.balance_after)} coins</td>
+              <td>{formatDate(entry.created_at)}</td>
+            </tr>
+          ))}
+          {!data.recentEarnings.length && <EmptyRow colSpan={5} text="No coin ledger activity yet." />}
+        </Table>
+      </Panel>
+
+      <Panel>
+        <PanelHead
+          title="Anonymous earning wallets"
+          description="Anonymous users earn into a hashed wallet until they sign in. No raw IP, browser, or network fingerprint is stored."
+          action={<span className="muted">{data.anonymousWallets.length} shown</span>}
+        />
+        <Table head={["Wallet", "Current balance", "Lifetime earned", "Claim status", "Last earned"]}>
+          {data.anonymousWallets.map((wallet) => (
+            <tr key={wallet.id}>
+              <td className="mono">{wallet.wallet_label}</td>
+              <td className="mono">{formatCoins(wallet.coin_balance)} coins</td>
+              <td className="mono">{formatCoins(wallet.total_earned)} coins</td>
+              <td><Badge tone={wallet.claimed ? "positive" : "caution"}>{wallet.claimed ? "Claimed" : "Unclaimed"}</Badge></td>
+              <td>{formatDate(wallet.last_earned_at)}</td>
+            </tr>
+          ))}
+          {!data.anonymousWallets.length && <EmptyRow colSpan={5} text="No anonymous earning wallets yet." />}
         </Table>
       </Panel>
 

@@ -31,16 +31,33 @@ function detailsFromUser(user: User) {
 
 export default function UserAccountBadge({ compact = false }: { compact?: boolean }) {
   const [account, setAccount] = useState<AccountDetails | null>(null);
+  const [anonymousBalance, setAnonymousBalance] = useState<number | null>(null);
 
   useEffect(() => {
     let mounted = true;
 
-    const loadAccount = async (user: User | null) => {
-      if (!user) {
-        if (mounted) setAccount(null);
+    const loadAnonymousBalance = async () => {
+      const walletId = window.localStorage.getItem("omegley_anonymous_wallet");
+      if (!walletId) {
+        if (mounted) setAnonymousBalance(0);
         return;
       }
 
+      const { data, error } = await supabase.rpc("get_anonymous_wallet_balance", { p_wallet_id: walletId });
+      if (!mounted) return;
+      setAnonymousBalance(error ? 0 : Number(data ?? 0));
+    };
+
+    const loadAccount = async (user: User | null) => {
+      if (!user) {
+        if (mounted) {
+          setAccount(null);
+          await loadAnonymousBalance();
+        }
+        return;
+      }
+
+      if (mounted) setAnonymousBalance(null);
       const google = detailsFromUser(user);
       if (mounted) setAccount({ ...google, availableCoins: 0 });
 
@@ -59,6 +76,9 @@ export default function UserAccountBadge({ compact = false }: { compact?: boolea
     };
 
     void supabase.auth.getUser().then(({ data }) => void loadAccount(data.user));
+    const refreshWallet = () => {
+      void supabase.auth.getUser().then(({ data }) => void loadAccount(data.user));
+    };
     const { data } = supabase.auth.onAuthStateChange((_event, session) =>
       void loadAccount(session?.user ?? null),
     );
@@ -66,22 +86,44 @@ export default function UserAccountBadge({ compact = false }: { compact?: boolea
       void supabase.auth.getUser().then(({ data: current }) => void loadAccount(current.user));
     };
     window.addEventListener("focus", refreshOnFocus);
+    window.addEventListener("omegley:wallet-updated", refreshWallet);
 
     return () => {
       mounted = false;
       data.subscription.unsubscribe();
       window.removeEventListener("focus", refreshOnFocus);
+      window.removeEventListener("omegley:wallet-updated", refreshWallet);
     };
   }, []);
 
   if (!account) {
     return (
-      <Link
-        href="/account"
-        className="hidden rounded-full border border-brand/30 bg-brand-soft px-3 py-2 text-2xs font-semibold text-brand-ink transition hover:border-brand/60 hover:text-ink sm:inline-flex"
-      >
-        Create a free account
-      </Link>
+      <div className="inline-flex items-center gap-1.5">
+        <span className="group relative inline-flex">
+          <Link
+            href="/account?mode=login"
+            aria-label={`${(anonymousBalance ?? 0).toLocaleString()} anonymous coins. Sign in to claim them.`}
+            className="inline-flex items-center gap-1.5 rounded-full border border-positive/25 bg-positive/10 px-2.5 py-1.5 text-2xs font-semibold text-positive transition hover:border-positive/50 hover:bg-positive/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-positive/60"
+          >
+            {(anonymousBalance ?? 0).toLocaleString()}
+            <span className="hidden sm:inline">coins</span>
+          </Link>
+          <span
+            role="tooltip"
+            className="pointer-events-none invisible absolute right-0 top-full z-50 mt-2 w-max max-w-64 translate-y-1 rounded-lg border border-white/10 bg-[#111118] px-3 py-2 text-xs font-medium leading-5 text-white opacity-0 shadow-2xl shadow-black/40 transition duration-150 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:visible group-focus-within:translate-y-0 group-focus-within:opacity-100"
+          >
+            {(anonymousBalance ?? 0) > 0
+              ? "Your anonymous rewards are saved. Sign in to claim them."
+              : "Complete a connection to earn 10 coins. Sign in to claim rewards."}
+          </span>
+        </span>
+        <Link
+          href="/account?mode=signup"
+          className="hidden rounded-full border border-brand/30 bg-brand-soft px-3 py-2 text-2xs font-semibold text-brand-ink transition hover:border-brand/60 hover:text-ink sm:inline-flex"
+        >
+          Sign in to claim
+        </Link>
+      </div>
     );
   }
 
