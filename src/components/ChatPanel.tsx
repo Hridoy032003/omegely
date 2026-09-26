@@ -28,8 +28,8 @@ export default function ChatPanel({ messages, disabled, connecting = false, onSe
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col rounded-card border border-line bg-panel/70">
-      <div className="flex items-center justify-between border-b border-line px-4 py-3">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-card border border-line bg-panel/70">
+      <div className="flex shrink-0 items-center justify-between border-b border-line px-4 py-3">
         <span className="text-sm font-medium text-ink-2">Chat</span>
         {onClose && (
           <button
@@ -42,7 +42,7 @@ export default function ChatPanel({ messages, disabled, connecting = false, onSe
         )}
       </div>
 
-      <div ref={logRef} className="thin-scroll flex-1 space-y-2 overflow-y-auto p-4">
+      <div ref={logRef} className="thin-scroll min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain p-4">
         {messages.length === 0 ? (
           <p className="mt-6 text-center text-sm text-ink-4">
             {connecting
@@ -71,7 +71,7 @@ export default function ChatPanel({ messages, disabled, connecting = false, onSe
         )}
       </div>
 
-      <form onSubmit={submit} className="flex gap-2 border-t border-line p-3">
+      <form onSubmit={submit} className="flex shrink-0 gap-2 border-t border-line p-3">
         <input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}

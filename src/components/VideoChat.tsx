@@ -470,7 +470,7 @@ export default function VideoChat() {
         </div>
       </header>
 
-      <div className="grid min-h-0 flex-1 gap-4 md:grid-cols-[1fr_340px]">
+      <div className="grid min-h-0 flex-1 overflow-hidden gap-4 md:grid-cols-[minmax(0,1fr)_340px]">
         {/* Video stage */}
         <section className="flex min-h-0 flex-col gap-3 sm:gap-4">
           <div
@@ -751,7 +751,7 @@ export default function VideoChat() {
         </section>
 
         {/* Chat — desktop side panel only */}
-        <aside className="hidden md:block">
+        <aside className="hidden min-h-0 overflow-hidden md:block">
           <ChatPanel
             messages={messages}
             disabled={!chatReady}
