@@ -770,6 +770,12 @@ export default function WalletPanel() {
           ))}
         </div>
 
+        {notice && activeTab !== "send" && activeTab !== "redeem" && (
+          <div className="mt-4">
+            <Notice tone={notice.tone}>{notice.text}</Notice>
+          </div>
+        )}
+
         <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(300px,1fr)]" role="tabpanel">
           {activeTab === "buy" ? (
             <BuyCoinsPanel
