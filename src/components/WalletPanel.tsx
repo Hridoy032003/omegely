@@ -50,6 +50,9 @@ type WithdrawalComplaint = {
 };
 
 const DEFAULT_WITHDRAWAL_MINIMUM = 5000;
+const DEFAULT_CONNECTION_REWARD = 10;
+const DEFAULT_REFERRAL_REWARD = 100;
+const DEFAULT_REFERRAL_DAYS = 7;
 const EMPTY_WALLET: WalletProfile = {
   displayName: "Omegley user",
   referralCode: "",
@@ -153,6 +156,9 @@ export default function WalletPanel() {
   const [withdrawalAmount, setWithdrawalAmount] = useState(String(DEFAULT_WITHDRAWAL_MINIMUM));
   const [withdrawalMinimum, setWithdrawalMinimum] = useState(DEFAULT_WITHDRAWAL_MINIMUM);
   const [withdrawalsEnabled, setWithdrawalsEnabled] = useState(true);
+  const [connectionReward, setConnectionReward] = useState(DEFAULT_CONNECTION_REWARD);
+  const [referralReward, setReferralReward] = useState(DEFAULT_REFERRAL_REWARD);
+  const [referralQualificationDays, setReferralQualificationDays] = useState(DEFAULT_REFERRAL_DAYS);
   const [withdrawalMethod, setWithdrawalMethod] = useState<"gift_card" | "cash_pending">("gift_card");
   const [withdrawalDestination, setWithdrawalDestination] = useState("");
   const [complaintWithdrawalId, setComplaintWithdrawalId] = useState<string | null>(null);
@@ -161,11 +167,16 @@ export default function WalletPanel() {
   const [complaintBusy, setComplaintBusy] = useState(false);
 
   const loadWallet = useCallback(async (currentUser: User) => {
+    // This is deliberately a narrow heartbeat used only for referral
+    // qualification; it is not a browser/device fingerprint.
+    void supabase.from("profiles").update({ last_seen: new Date().toISOString() }).eq("id", currentUser.id);
     const anonymousWallet = window.localStorage.getItem("omegley_anonymous_wallet");
     if (anonymousWallet) {
       const { data: claimed } = await supabase.rpc("claim_anonymous_wallet", { p_wallet_id: anonymousWallet });
       if (Number(claimed ?? 0) > 0) window.localStorage.removeItem("omegley_anonymous_wallet");
     }
+
+    await supabase.rpc("qualify_referrals");
 
     const [profileResult, transactionsResult, withdrawalsResult, complaintsResult, settingsResult] = await Promise.all([
       supabase
@@ -219,6 +230,9 @@ export default function WalletPanel() {
         Number(current) === DEFAULT_WITHDRAWAL_MINIMUM ? String(safeMinimum) : current,
       );
       setWithdrawalsEnabled(Boolean(publicSettings.withdrawals_enabled));
+      setConnectionReward(Number(publicSettings.connection_reward_coins) || DEFAULT_CONNECTION_REWARD);
+      setReferralReward(Number(publicSettings.referral_reward_coins) || DEFAULT_REFERRAL_REWARD);
+      setReferralQualificationDays(Number(publicSettings.referral_qualification_days) || DEFAULT_REFERRAL_DAYS);
     }
 
     if (!profile?.referral_code) {
@@ -402,8 +416,8 @@ export default function WalletPanel() {
             </p>
             <p className="mt-1 text-sm text-ink-3">100 coins = 1 dollar</p>
             <div className="mt-6 border-t border-line">
-              <PreviewRow label="Complete a connection" value="+10" />
-              <PreviewRow label="Successful referral" value="+100" />
+              <PreviewRow label="Complete a connection" value={`+${connectionReward}`} />
+              <PreviewRow label="Qualified referral" value={`+${referralReward}`} />
             </div>
           </Panel>
         </div>
@@ -452,7 +466,7 @@ export default function WalletPanel() {
           <Stat label="Pending withdrawal" value={formatCoins(wallet.reservedCoins)} sub="Reserved for review" />
           <div>
             <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-ink-3">Next reward</p>
-            <p className="mt-2 font-display text-2xl font-semibold tracking-tight text-ink">+10 coins</p>
+            <p className="mt-2 font-display text-2xl font-semibold tracking-tight text-ink">+{connectionReward} coins</p>
             <Link
               href="/chat"
               className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-brand-ink transition-colors hover:text-ink"
@@ -508,7 +522,7 @@ export default function WalletPanel() {
                     tone="text-brand-ink bg-brand-soft"
                     title="Complete a connection"
                     body="Connect with someone in random chat. There is no minimum duration."
-                    reward="+10"
+                    reward={`+${connectionReward}`}
                     href="/chat"
                     hrefLabel="Start chatting"
                   />
@@ -516,8 +530,8 @@ export default function WalletPanel() {
                     icon="referral"
                     tone="text-sky-300 bg-sky-400/10"
                     title="Invite a friend"
-                    body="Earn after a new member creates an account using your personal link."
-                    reward="+100"
+                    body={`Earn after a new member joins with your link and returns after ${referralQualificationDays} days.`}
+                    reward={`+${referralReward}`}
                   />
                   <EarnRow
                     icon="bonus"
@@ -534,7 +548,7 @@ export default function WalletPanel() {
                   <PanelHead
                     label="Your referral link"
                     title="Invite friends. Earn together."
-                    description="Share your personal link. You receive 100 coins when an eligible friend joins."
+                    description={`Share your personal link. You receive ${referralReward} coins when an eligible friend returns after ${referralQualificationDays} days.`}
                   />
                   <div className="mt-5">
                     <Field label="Personal invite link" htmlFor="wallet-referral-link">

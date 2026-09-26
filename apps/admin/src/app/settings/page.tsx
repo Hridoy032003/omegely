@@ -9,6 +9,11 @@ type Settings = {
   withdrawal_minimum_coins: number;
   connection_rewards_enabled: boolean;
   referral_rewards_enabled: boolean;
+  connection_reward_coins: number;
+  referral_reward_coins: number;
+  daily_connection_reward_limit: number;
+  referral_qualification_days: number;
+  mutual_connection_required: boolean;
 };
 
 const DEFAULTS: Settings = {
@@ -16,6 +21,11 @@ const DEFAULTS: Settings = {
   withdrawal_minimum_coins: 5000,
   connection_rewards_enabled: true,
   referral_rewards_enabled: true,
+  connection_reward_coins: 10,
+  referral_reward_coins: 100,
+  daily_connection_reward_limit: 100,
+  referral_qualification_days: 7,
+  mutual_connection_required: true,
 };
 
 export default function SettingsPage() {
@@ -90,17 +100,24 @@ export default function SettingsPage() {
             />
             <Toggle
               label="Connection rewards enabled"
-              description="Issue 10 coins when a completed connection ends."
+              description="Issue the configured coins when a completed connection ends."
               checked={draft.connection_rewards_enabled}
               disabled={loading}
               onChange={(value) => set("connection_rewards_enabled", value)}
             />
             <Toggle
               label="Referral rewards enabled"
-              description="Issue 100 coins for each qualified referral."
+              description="Issue the configured reward after the qualification window."
               checked={draft.referral_rewards_enabled}
               disabled={loading}
               onChange={(value) => set("referral_rewards_enabled", value)}
+            />
+            <Toggle
+              label="Mutual connection required"
+              description="Keep rewards tied to a completed two-person connection."
+              checked={draft.mutual_connection_required}
+              disabled={loading}
+              onChange={(value) => set("mutual_connection_required", value)}
             />
           </div>
         </Panel>
@@ -111,6 +128,28 @@ export default function SettingsPage() {
             description="Users must reach this balance before they can request a payout."
           />
           <div className="panel-body grid">
+            <div className="grid grid--halves">
+              <div className="field">
+                <label htmlFor="connection-reward-coins">Connection reward</label>
+                <input id="connection-reward-coins" className="input" type="number" min="1" max="1000" step="1" disabled={loading} value={draft.connection_reward_coins} onChange={(event) => set("connection_reward_coins", Number(event.target.value))} />
+                <span className="field-hint">Coins issued after a completed connection.</span>
+              </div>
+              <div className="field">
+                <label htmlFor="daily-connection-limit">Daily connection cap</label>
+                <input id="daily-connection-limit" className="input" type="number" min="1" max="10000" step="1" disabled={loading} value={draft.daily_connection_reward_limit} onChange={(event) => set("daily_connection_reward_limit", Number(event.target.value))} />
+                <span className="field-hint">Maximum connection coins per user per day.</span>
+              </div>
+              <div className="field">
+                <label htmlFor="referral-reward-coins">Referral reward</label>
+                <input id="referral-reward-coins" className="input" type="number" min="1" max="5000" step="1" disabled={loading} value={draft.referral_reward_coins} onChange={(event) => set("referral_reward_coins", Number(event.target.value))} />
+                <span className="field-hint">Paid only after the referral qualifies.</span>
+              </div>
+              <div className="field">
+                <label htmlFor="referral-qualification-days">Referral qualification days</label>
+                <input id="referral-qualification-days" className="input" type="number" min="1" max="30" step="1" disabled={loading} value={draft.referral_qualification_days} onChange={(event) => set("referral_qualification_days", Number(event.target.value))} />
+                <span className="field-hint">The referred user must return after this window.</span>
+              </div>
+            </div>
             <div className="field">
               <label htmlFor="minimum-coins">Minimum withdrawal coins</label>
               <input

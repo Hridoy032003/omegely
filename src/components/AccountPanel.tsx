@@ -85,11 +85,19 @@ export default function AccountPanel() {
 
   const loadProfile = useCallback(async (currentUser: User) => {
     const google = googleDetails(currentUser);
+    void supabase.from("profiles").update({ last_seen: new Date().toISOString() }).eq("id", currentUser.id);
     const anonymousWallet = window.localStorage.getItem("omegley_anonymous_wallet");
     if (anonymousWallet) {
       const { data: claimed } = await supabase.rpc("claim_anonymous_wallet", { p_wallet_id: anonymousWallet });
       if (Number(claimed ?? 0) > 0) window.localStorage.removeItem("omegley_anonymous_wallet");
     }
+
+    const referralCode = window.localStorage.getItem("omegley_referral_code");
+    if (referralCode) {
+      const { data: claimed } = await supabase.rpc("claim_referral", { p_referral_code: referralCode });
+      if (claimed) window.localStorage.removeItem("omegley_referral_code");
+    }
+    await supabase.rpc("qualify_referrals");
 
     const { data } = await supabase
       .from("profiles")
@@ -109,12 +117,6 @@ export default function AccountPanel() {
 
     if (!data?.referral_code) {
       void supabase.from("profiles").update({ referral_code: fallbackReferralCode }).eq("id", currentUser.id);
-    }
-
-    const referralCode = window.localStorage.getItem("omegley_referral_code");
-    if (referralCode) {
-      const { data: claimed } = await supabase.rpc("claim_referral", { p_referral_code: referralCode });
-      if (claimed) window.localStorage.removeItem("omegley_referral_code");
     }
 
     if (data && (google.name || google.avatar) && (!data.display_name || !data.avatar_url)) {

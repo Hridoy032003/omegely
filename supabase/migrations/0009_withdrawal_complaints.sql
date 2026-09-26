@@ -34,7 +34,7 @@ create or replace function public.file_withdrawal_complaint(
   p_message text
 )
 returns uuid
-language plpgsqla
+language plpgsql
 security definer
 set search_path = public
 as $$

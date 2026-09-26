@@ -188,7 +188,7 @@ export default function Home() {
               <p className="mt-6 max-w-xl text-lg leading-relaxed text-neutral-300">
                 Omegley helps you talk to strangers online through free,
                 anonymous 1-to-1 video, voice, and text chat. Meet someone new
-                anywhere in the world—no signup, no download, and no history. Create an account when you want to earn 100 coins for every successful referral.
+              anywhere in the world—no signup, no download, and no history. Create an account when you want to earn 100 coins for every qualified referral.
               </p>
 
               <div className="mt-9 flex flex-col gap-3 sm:flex-row">
@@ -411,8 +411,8 @@ export default function Home() {
         <section id="earn" className="scroll-mt-20 border-t border-white/10 py-20 md:py-28">
           <div className="container-page grid gap-10 rounded-3xl border border-indigo-400/20 bg-gradient-to-br from-indigo-500/10 via-white/[0.02] to-transparent p-8 md:grid-cols-[1fr_auto] md:items-center md:p-12">
             <div>
-              <SectionHeading align="left" eyebrow="Referral rewards" title="Invite friends. Earn real value." subtitle="Create your free account, share your personal invite link, and earn 100 Omegley coins — equal to 1 dollar — for every successful referral." />
-              <p className="mt-4 text-sm text-neutral-500">Your balance and referral history are always visible from your account. No hidden tiers or confusing points system.</p>
+              <SectionHeading align="left" eyebrow="Referral rewards" title="Invite friends. Earn real value." subtitle="Create your free account, share your personal invite link, and earn 100 Omegley coins — equal to 1 dollar — after a referred member returns and qualifies." />
+              <p className="mt-4 text-sm text-neutral-500">Your balance and referral history are always visible from your account. No hidden tiers or confusing points system; pending referrals are clearly labeled before they qualify.</p>
             </div>
             <Link href="/account" className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-6 py-3.5 text-sm font-semibold text-neutral-950 transition hover:bg-neutral-200">Create your invite link <ArrowRight className="h-4 w-4" /></Link>
           </div>
@@ -439,7 +439,7 @@ export default function Home() {
                 Someone interesting is online right now.
               </h2>
               <p className="mx-auto mt-4 max-w-xl text-neutral-300">
-                Chat for free, or create an account and earn 100 coins — equal to 1 dollar — for every successful referral.
+                Chat for free, or create an account and earn 100 coins — equal to 1 dollar — for every qualified referral.
               </p>
               <Link
                 href="/chat"

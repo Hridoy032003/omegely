@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useWebRTC } from "@/hooks/useWebRTC";
+import { supabase } from "@/lib/supabase-browser";
 import { countryFlag } from "@/lib/flag";
 import { LogoMark } from "@/components/logo";
 import UserAccountBadge from "@/components/UserAccountBadge";
@@ -21,12 +22,19 @@ import {
   VideoOff,
 } from "@/components/icons";
 
+async function hashSession(value: string) {
+  const bytes = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 export default function VideoChat() {
   const rtc = useWebRTC();
   const {
     status,
     messages,
     partnerCountry,
+    partnerClientId,
     onlineCount,
     mediaError,
     starting,
@@ -39,6 +47,7 @@ export default function VideoChat() {
     remoteVideoRef,
     start,
     next,
+    blockCurrentPartner,
     stop,
     sendMessage,
     toggleMic,
@@ -68,6 +77,58 @@ export default function VideoChat() {
   const [shareStatus, setShareStatus] = useState<"idle" | "shared" | "copied" | "error">("idle");
   const [swipeOffset, setSwipeOffset] = useState(0);
   const [swipeAnimating, setSwipeAnimating] = useState(false);
+  const [ageGateOpen, setAgeGateOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportReason, setReportReason] = useState("Harassment or abuse");
+  const [reportDetails, setReportDetails] = useState("");
+  const [reportBusy, setReportBusy] = useState(false);
+  const [reportNotice, setReportNotice] = useState<string | null>(null);
+
+  const startChat = () => {
+    if (window.localStorage.getItem("omegley_age_confirmed") === "yes") {
+      void start();
+    } else {
+      setAgeGateOpen(true);
+    }
+  };
+
+  const confirmAge = () => {
+    window.localStorage.setItem("omegley_age_confirmed", "yes");
+    setAgeGateOpen(false);
+    void start();
+  };
+
+  const submitReport = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!partnerClientId || reportBusy) return;
+    setReportBusy(true);
+    setReportNotice(null);
+    try {
+      let reporterSeed = window.localStorage.getItem("omegley_anonymous_wallet");
+      if (!reporterSeed) {
+        reporterSeed = crypto.randomUUID();
+        window.localStorage.setItem("omegley_anonymous_wallet", reporterSeed);
+      }
+      const [reporterHash, targetHash] = await Promise.all([
+        hashSession(reporterSeed),
+        hashSession(partnerClientId),
+      ]);
+      const { data: reportId, error } = await supabase.rpc("submit_anonymous_report", {
+        p_reporter_session_hash: reporterHash,
+        p_target_session_hash: targetHash,
+        p_reason: reportReason,
+        p_details: reportDetails.trim() || null,
+      });
+      if (error || !reportId) throw new Error(error?.message || "This report could not be submitted.");
+      setReportNotice("Thanks. The report was sent to the safety team.");
+      setReportDetails("");
+      window.setTimeout(() => setReportOpen(false), 900);
+    } catch (error) {
+      setReportNotice(error instanceof Error ? error.message : "This report could not be submitted.");
+    } finally {
+      setReportBusy(false);
+    }
+  };
 
   useEffect(() => {
     return () => {
@@ -454,6 +515,17 @@ export default function VideoChat() {
               </div>
             )}
 
+            {isConnected && remoteReady && (
+              <div className="absolute right-3 top-3 flex gap-2">
+                <button type="button" onClick={() => { setReportNotice(null); setReportOpen(true); }} className="rounded-full border border-white/15 bg-black/60 px-3 py-1.5 text-xs text-white backdrop-blur transition hover:bg-black/80">
+                  Report
+                </button>
+                <button type="button" onClick={blockCurrentPartner} className="rounded-full border border-red-300/25 bg-red-950/60 px-3 py-1.5 text-xs text-red-100 backdrop-blur transition hover:bg-red-900/80">
+                  Block &amp; next
+                </button>
+              </div>
+            )}
+
             {/* Local preview is useful before the demo appears, then stays out
                 of the way so it cannot cover the waiting actions on small screens. */}
             <video
@@ -478,7 +550,7 @@ export default function VideoChat() {
           <div className="flex justify-center">
             {isIdle ? (
               <button
-                onClick={start}
+                onClick={startChat}
                 disabled={starting}
                 aria-busy={starting}
                 className="inline-flex cursor-pointer items-center gap-2 rounded-full bg-white px-10 py-3.5 text-sm font-semibold text-neutral-950 shadow-lg shadow-indigo-500/10 transition hover:bg-neutral-200 disabled:cursor-wait disabled:opacity-70"
@@ -578,6 +650,47 @@ export default function VideoChat() {
           </div>
         </div>
       </div>
+
+      {ageGateOpen && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
+          <div role="dialog" aria-modal="true" aria-labelledby="age-gate-title" className="w-full max-w-md rounded-2xl border border-white/15 bg-neutral-950 p-6 shadow-2xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-indigo-300">Before you start</p>
+            <h2 id="age-gate-title" className="mt-3 text-xl font-semibold text-white">Omegley is for adults only.</h2>
+            <p className="mt-3 text-sm leading-relaxed text-neutral-300">You must be 18 or older, follow the Community Guidelines, and report or block anything unsafe.</p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button type="button" onClick={() => setAgeGateOpen(false)} className="rounded-full border border-white/15 px-4 py-2 text-sm text-neutral-300">Cancel</button>
+              <button type="button" onClick={confirmAge} className="rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500">I’m 18 — continue</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {reportOpen && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
+          <form onSubmit={submitReport} className="w-full max-w-md rounded-2xl border border-white/15 bg-neutral-950 p-6 shadow-2xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-indigo-300">Safety report</p>
+            <h2 className="mt-3 text-xl font-semibold text-white">What happened?</h2>
+            <p className="mt-2 text-sm leading-relaxed text-neutral-400">We store a one-way session reference so the safety team can investigate without storing raw device fingerprints.</p>
+            <label className="mt-5 block text-sm text-neutral-300">Reason
+              <select value={reportReason} onChange={(event) => setReportReason(event.target.value)} className="mt-2 w-full rounded-xl border border-white/15 bg-white/5 px-3 py-2.5 text-sm text-white">
+                <option>Harassment or abuse</option>
+                <option>Sexual content</option>
+                <option>Spam or scam</option>
+                <option>Underage user</option>
+                <option>Other safety issue</option>
+              </select>
+            </label>
+            <label className="mt-4 block text-sm text-neutral-300">Details (optional)
+              <textarea value={reportDetails} onChange={(event) => setReportDetails(event.target.value)} maxLength={2000} rows={4} className="mt-2 w-full resize-y rounded-xl border border-white/15 bg-white/5 px-3 py-2.5 text-sm text-white placeholder:text-neutral-600" placeholder="Tell us what the safety team should review." />
+            </label>
+            {reportNotice && <p role="status" className="mt-4 text-sm text-indigo-200">{reportNotice}</p>}
+            <div className="mt-6 flex justify-end gap-3">
+              <button type="button" onClick={() => setReportOpen(false)} className="rounded-full border border-white/15 px-4 py-2 text-sm text-neutral-300">Cancel</button>
+              <button type="submit" disabled={reportBusy} className="rounded-full bg-red-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{reportBusy ? "Sending…" : "Send report"}</button>
+            </div>
+          </form>
+        </div>
+      )}
     </main>
   );
 }

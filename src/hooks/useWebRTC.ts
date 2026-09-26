@@ -104,6 +104,7 @@ export function useWebRTC() {
   const [status, setStatus] = useState<Status>("idle");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [partnerCountry, setPartnerCountry] = useState<string | null>(null);
+  const [partnerClientId, setPartnerClientId] = useState<string | null>(null);
   const [partnerProfile, setPartnerProfile] = useState<PublicProfile | null>(null);
   const [onlineCount, setOnlineCount] = useState(0);
   const [mediaError, setMediaError] = useState<string | null>(null);
@@ -134,6 +135,7 @@ export function useWebRTC() {
   const publicProfileRef = useRef<PublicProfile | null>(null);
   const pendingReqRef = useRef<{ to: string; timer: ReturnType<typeof setTimeout> } | null>(null);
   const cooldownRef = useRef<Map<string, number>>(new Map()); // partnerId -> left-at ms
+  const blockedPeerIdsRef = useRef<Set<string>>(new Set());
   const helloTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startInFlightRef = useRef(false);
   const connectionEventRef = useRef<string | null>(null);
@@ -402,6 +404,7 @@ export function useWebRTC() {
     async (partnerId: string, country: string, profile?: PublicProfile | null) => {
       if (partnerRef.current) return; // already paired
       partnerRef.current = partnerId;
+      setPartnerClientId(partnerId);
       partnerCountryRef.current = country;
       clearPending();
       stopHello();
@@ -428,6 +431,7 @@ export function useWebRTC() {
     (fromId: string, country: string) => {
       if (statusRef.current !== "searching") return;
       if (!fromId || fromId === myIdRef.current) return;
+      if (blockedPeerIdsRef.current.has(fromId)) return;
       if (partnerRef.current || pendingReqRef.current) return;
 
       const leftAt = cooldownRef.current.get(fromId);
@@ -471,6 +475,7 @@ export function useWebRTC() {
     }
 
     partnerRef.current = null;
+    setPartnerClientId(null);
     setPartnerCountry(null);
     setPartnerProfile(null);
     setStatusBoth("searching");
@@ -481,6 +486,25 @@ export function useWebRTC() {
     helloTimerRef.current = setInterval(announceHello, HEARTBEAT_MS); // …then keep announcing
     void scanLobby();
   }, [announceHello, clearPending, scanLobby, setStatusBoth, stopHello]);
+
+  const blockCurrentPartner = useCallback(() => {
+    const partnerId = partnerRef.current;
+    if (!partnerId) return;
+    blockedPeerIdsRef.current.add(partnerId);
+    try {
+      window.localStorage.setItem(
+        "omegley_blocked_sessions",
+        JSON.stringify([...blockedPeerIdsRef.current].slice(-100)),
+      );
+    } catch {
+      // Keep the block active for this session if storage is unavailable.
+    }
+    sendTo(partnerId, MSG.BYE, {});
+    teardownPeer();
+    partnerRef.current = null;
+    setMessages([]);
+    beginSearch();
+  }, [beginSearch, sendTo, teardownPeer]);
 
   const onPartnerLeft = useCallback(() => {
     rewardCompletedConnection();
@@ -558,6 +582,16 @@ export function useWebRTC() {
 
     try {
       setMediaError(null);
+      try {
+        const stored = JSON.parse(window.localStorage.getItem("omegley_blocked_sessions") || "[]");
+        blockedPeerIdsRef.current = new Set(
+          Array.isArray(stored)
+            ? stored.filter((value): value is string => typeof value === "string").slice(-100)
+            : [],
+        );
+      } catch {
+        blockedPeerIdsRef.current = new Set();
+      }
 
       // 1) Local media first — no point matching without a camera/mic.
       try {
@@ -740,6 +774,7 @@ export function useWebRTC() {
     }
     teardownPeer();
     partnerRef.current = null;
+    setPartnerClientId(null);
     setMessages([]);
     beginSearch();
   }, [beginSearch, rewardCompletedConnection, sendTo, teardownPeer]);
@@ -769,6 +804,7 @@ export function useWebRTC() {
 
     setMessages([]);
     setPartnerCountry(null);
+    setPartnerClientId(null);
     setPartnerProfile(null);
     setOnlineCount(0);
     setChatReady(false);
@@ -824,6 +860,7 @@ export function useWebRTC() {
     status,
     messages,
     partnerCountry,
+    partnerClientId,
     partnerProfile,
     onlineCount,
     mediaError,
@@ -836,6 +873,7 @@ export function useWebRTC() {
     remoteVideoRef,
     start,
     next,
+    blockCurrentPartner,
     stop,
     sendMessage,
     toggleMic,
