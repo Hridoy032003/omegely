@@ -35,6 +35,7 @@ export default function AdminPage({ initialSection = "dashboard" }: { initialSec
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [session, setSession] = useState<Session | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [data, setData] = useState<DashboardData>(EMPTY);
   const [activeSection, setActiveSection] = useState<Section>(initialSection);
   const [message, setMessage] = useState("");
@@ -64,9 +65,15 @@ export default function AdminPage({ initialSection = "dashboard" }: { initialSec
   }, [loadDashboard]);
 
   useEffect(() => {
-    void supabase.auth.getSession().then(({ data: current }) => {
-      if (current.session) void verifyAdmin(current.session).catch((error: Error) => setMessage(error.message));
-    });
+    void supabase.auth.getSession().then(async ({ data: current }) => {
+      if (current.session) {
+        try {
+          await verifyAdmin(current.session);
+        } catch (error) {
+          setMessage((error as Error).message);
+        }
+      }
+    }).finally(() => setAuthLoading(false));
   }, [verifyAdmin]);
 
   const signIn = async (event: FormEvent) => {
@@ -111,6 +118,7 @@ export default function AdminPage({ initialSection = "dashboard" }: { initialSec
     setBusy(false);
   };
 
+  if (authLoading) return <AdminLoadingScreen />;
   if (!session) return <LoginScreen email={email} password={password} busy={busy} message={message} setEmail={setEmail} setPassword={setPassword} onSubmit={signIn} />;
 
   const adminName = session.user.email?.split("@")[0] || "Admin";
@@ -174,6 +182,10 @@ export default function AdminPage({ initialSection = "dashboard" }: { initialSec
       </main>
     </div>
   );
+}
+
+function AdminLoadingScreen() {
+  return <main className="login-page"><section className="login-card loading-card"><div className="admin-brand"><span className="brand-mark">O</span><span><strong>omegley</strong><small>ADMIN CONSOLE</small></span></div><div className="loading-indicator"><span /><span /><span /></div><p className="muted">Checking your admin session…</p></section></main>;
 }
 
 function LoginScreen({ email, password, busy, message, setEmail, setPassword, onSubmit }: { email: string; password: string; busy: boolean; message: string; setEmail: (value: string) => void; setPassword: (value: string) => void; onSubmit: (event: FormEvent) => void }) {
