@@ -536,12 +536,22 @@ export default function AccountPanel() {
               <p className="mt-4 text-sm leading-relaxed text-ink-2">
                 Earn coins through connections and referrals, then manage redemptions in your wallet.
               </p>
-              <p className="mt-6 flex items-baseline gap-2">
-                <span className="font-display text-4xl font-semibold tracking-tight text-ink">
-                  {availableCoins.toLocaleString()}
-                </span>
-                <span className="text-sm text-brand-ink">available coins</span>
-              </p>
+              <div className="mt-6 grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-ink-3">Total wallet</p>
+                  <p className="mt-2 font-display text-3xl font-semibold tracking-tight text-ink">
+                    {profile.coin_balance.toLocaleString()}
+                  </p>
+                  <p className="mt-1 text-sm text-brand-ink">coins</p>
+                </div>
+                <div>
+                  <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-ink-3">Available to withdraw</p>
+                  <p className="mt-2 font-display text-3xl font-semibold tracking-tight text-ink">
+                    {availableCoins.toLocaleString()}
+                  </p>
+                  <p className="mt-1 text-sm text-brand-ink">coins</p>
+                </div>
+              </div>
               <p title="100 coins = 1 dollar" className="mt-2 text-2xs text-ink-4">100 coins = 1 dollar. Coins are the wallet unit.</p>
               <Link href="/wallet" className={`${buttonClass({ variant: "brand", size: "sm", block: true })} mt-5`}>
                 Open wallet
