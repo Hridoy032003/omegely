@@ -30,6 +30,9 @@ export default function VideoChat() {
     onlineCount,
     mediaError,
     starting,
+    chatReady,
+    peerUnstable,
+    partnerProfile,
     micOn,
     camOn,
     localVideoRef,
@@ -390,6 +393,59 @@ export default function VideoChat() {
               </div>
             )}
 
+            {/* Match's shared profile — only present when they chose a public profile. */}
+            {isConnected && remoteReady && partnerProfile && (
+              <div className="absolute left-3 right-3 top-14 max-w-xs rounded-card border border-white/15 bg-black/60 p-3 backdrop-blur sm:right-auto sm:max-w-sm">
+                <div className="flex items-center gap-2.5">
+                  {partnerProfile.avatar_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={partnerProfile.avatar_url}
+                      alt=""
+                      width={32}
+                      height={32}
+                      referrerPolicy="no-referrer"
+                      className="h-8 w-8 shrink-0 rounded-full object-cover"
+                    />
+                  ) : (
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-hi text-2xs font-semibold text-white">
+                      {(partnerProfile.display_name || "?").slice(0, 1).toUpperCase()}
+                    </span>
+                  )}
+                  <p className="min-w-0 truncate text-sm font-medium text-white">
+                    {partnerProfile.display_name || "Anonymous stranger"}
+                  </p>
+                </div>
+                {partnerProfile.bio && (
+                  <p className="mt-2 line-clamp-2 text-2xs leading-relaxed text-neutral-300">
+                    {partnerProfile.bio}
+                  </p>
+                )}
+                {partnerProfile.interests.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {partnerProfile.interests.slice(0, 4).map((interest) => (
+                      <span
+                        key={interest}
+                        className="rounded-full bg-white/10 px-2 py-0.5 text-2xs text-neutral-200"
+                      >
+                        {interest}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* The peer connection is struggling — say so instead of showing a frozen frame. */}
+            {isConnected && peerUnstable && (
+              <div
+                role="status"
+                className="absolute left-1/2 top-3 -translate-x-1/2 rounded-full border border-caution/30 bg-caution/15 px-3 py-1.5 text-2xs font-medium text-caution backdrop-blur"
+              >
+                Connection unstable — reconnecting…
+              </div>
+            )}
+
             {/* TikTok-style mobile gesture hint. The button remains available for keyboard and desktop users. */}
             {isConnected && remoteReady && (
               <div className="pointer-events-none absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full bg-black/45 px-3 py-1.5 text-[11px] text-neutral-300 backdrop-blur sm:hidden">
@@ -474,7 +530,8 @@ export default function VideoChat() {
         <aside className="hidden md:block">
           <ChatPanel
             messages={messages}
-            disabled={!isConnected}
+            disabled={!chatReady}
+            connecting={isConnected && !chatReady}
             onSend={sendMessage}
           />
         </aside>
@@ -493,10 +550,8 @@ export default function VideoChat() {
 
       {/* Mobile chat bottom sheet */}
       <div
-        className={`fixed inset-0 z-50 md:hidden ${
-          chatOpen ? "" : "pointer-events-none"
-        }`}
-        aria-hidden={!chatOpen}
+        className={`fixed inset-0 z-50 md:hidden ${chatOpen ? "" : "pointer-events-none"}`}
+        inert={!chatOpen}
       >
         {/* backdrop */}
         <div
@@ -515,7 +570,8 @@ export default function VideoChat() {
           <div className="min-h-0 flex-1">
             <ChatPanel
               messages={messages}
-              disabled={!isConnected}
+              disabled={!chatReady}
+              connecting={isConnected && !chatReady}
               onSend={sendMessage}
               onClose={() => setChatOpen(false)}
             />

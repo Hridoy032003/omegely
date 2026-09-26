@@ -8,11 +8,13 @@ interface ChatPanelProps {
   messages: ChatMessage[];
   disabled: boolean;
   onSend: (text: string) => boolean;
+  /** Matched, but the data channel hasn't opened yet — the composer stays disabled. */
+  connecting?: boolean;
   /** When provided, renders a close button in the header (used by the mobile sheet). */
   onClose?: () => void;
 }
 
-export default function ChatPanel({ messages, disabled, onSend, onClose }: ChatPanelProps) {
+export default function ChatPanel({ messages, disabled, connecting = false, onSend, onClose }: ChatPanelProps) {
   const [draft, setDraft] = useState("");
   const logRef = useRef<HTMLDivElement | null>(null);
 
@@ -26,9 +28,9 @@ export default function ChatPanel({ messages, disabled, onSend, onClose }: ChatP
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col rounded-2xl border border-white/10 bg-neutral-900/60">
-      <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-        <span className="text-sm font-medium text-neutral-300">Chat</span>
+    <div className="flex h-full min-h-0 flex-col rounded-card border border-line bg-panel/70">
+      <div className="flex items-center justify-between border-b border-line px-4 py-3">
+        <span className="text-sm font-medium text-ink-2">Chat</span>
         {onClose && (
           <button
             onClick={onClose}
@@ -42,10 +44,12 @@ export default function ChatPanel({ messages, disabled, onSend, onClose }: ChatP
 
       <div ref={logRef} className="thin-scroll flex-1 space-y-2 overflow-y-auto p-4">
         {messages.length === 0 ? (
-          <p className="mt-6 text-center text-sm text-neutral-600">
-            {disabled
-              ? "Messages appear once you're connected to a stranger."
-              : "Say hi 👋"}
+          <p className="mt-6 text-center text-sm text-ink-4">
+            {connecting
+              ? "Opening the chat channel…"
+              : disabled
+                ? "Messages appear once you're connected to a stranger."
+                : "Say hi 👋"}
           </p>
         ) : (
           messages.map((m) => (
@@ -56,8 +60,8 @@ export default function ChatPanel({ messages, disabled, onSend, onClose }: ChatP
               <span
                 className={`max-w-[80%] whitespace-pre-wrap break-words rounded-2xl px-3 py-2 text-sm ${
                   m.from === "me"
-                    ? "bg-indigo-600 text-white"
-                    : "bg-neutral-800 text-neutral-100"
+                    ? "bg-brand-hi text-white"
+                    : "bg-panel-hi text-ink"
                 }`}
               >
                 {m.text}
@@ -67,19 +71,19 @@ export default function ChatPanel({ messages, disabled, onSend, onClose }: ChatP
         )}
       </div>
 
-      <form onSubmit={submit} className="flex gap-2 border-t border-neutral-800 p-3">
+      <form onSubmit={submit} className="flex gap-2 border-t border-line p-3">
         <input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           disabled={disabled}
-          placeholder={disabled ? "Not connected" : "Type a message…"}
-          className="flex-1 rounded-xl border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm outline-none focus:border-indigo-500 disabled:opacity-50"
+          placeholder={connecting ? "Connecting…" : disabled ? "Not connected" : "Type a message…"}
+          className="min-w-0 flex-1 rounded-control border border-line bg-black/30 px-3 py-2 text-sm text-ink outline-none transition placeholder:text-ink-4 focus:border-brand/60 disabled:opacity-50"
           maxLength={1000}
         />
         <button
           type="submit"
           disabled={disabled || !draft.trim()}
-          className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-40"
+          className="shrink-0 rounded-control bg-brand-hi px-4 py-2 text-sm font-medium text-white transition hover:bg-brand disabled:opacity-40"
         >
           Send
         </button>

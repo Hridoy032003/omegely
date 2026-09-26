@@ -26,7 +26,15 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     await context.db.from("profiles").update({ coin_balance: nextBalance, reserved_coins: Math.max(0, Number(profile.data.reserved_coins ?? 0) - amount) }).eq("id", current.data.user_id);
     await context.db.from("coin_transactions").insert({ user_id: current.data.user_id, type: "redemption", amount: -amount, balance_after: nextBalance, description: "Withdrawal paid" });
   }
-  const updated = await context.db.from("withdrawal_requests").update({ status: nextStatus, admin_note: typeof body.admin_note === "string" ? body.admin_note.slice(0, 240) : null, reviewed_at: new Date().toISOString(), reviewed_by: context.user.id }).eq("id", id);
+  // Only touch admin_note when one was supplied — approving a request used to
+  // erase the note recorded when it was first reviewed.
+  const updates: Record<string, unknown> = {
+    status: nextStatus,
+    reviewed_at: new Date().toISOString(),
+    reviewed_by: context.user.id,
+  };
+  if (typeof body.admin_note === "string") updates.admin_note = body.admin_note.slice(0, 240);
+  const updated = await context.db.from("withdrawal_requests").update(updates).eq("id", id);
   if (updated.error) return NextResponse.json({ error: updated.error.message }, { status: 400 });
   return NextResponse.json({ ok: true });
 }

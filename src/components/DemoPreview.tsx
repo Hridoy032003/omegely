@@ -7,17 +7,17 @@ const SCENES = [
   {
     gradient: "from-indigo-500/50 via-violet-500/25 to-sky-500/35",
     orb: "bg-indigo-300/40",
-    accent: "bg-indigo-300",
+    accent: "bg-indigo-300/30",
   },
   {
     gradient: "from-emerald-500/40 via-cyan-500/20 to-blue-500/35",
     orb: "bg-cyan-300/40",
-    accent: "bg-cyan-300",
+    accent: "bg-cyan-300/30",
   },
   {
     gradient: "from-amber-500/35 via-rose-500/20 to-fuchsia-500/35",
     orb: "bg-rose-300/40",
-    accent: "bg-rose-300",
+    accent: "bg-rose-300/30",
   },
 ];
 
@@ -63,7 +63,7 @@ export default function DemoPreview() {
         <div className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center">
           <div className={`relative h-24 w-24 rounded-full ${scene.orb} shadow-[0_0_70px_rgba(255,255,255,0.2)] animate-pulseGlow`}>
             <div className="absolute left-1/2 top-1/2 h-14 w-14 -translate-x-1/2 -translate-y-1/2 rounded-[45%] bg-white/20 blur-sm" />
-            <div className={`absolute bottom-[-1.25rem] left-1/2 h-20 w-32 -translate-x-1/2 rounded-t-[50%] ${scene.accent}/30 blur-sm`} />
+            <div className={`absolute bottom-[-1.25rem] left-1/2 h-20 w-32 -translate-x-1/2 rounded-t-[50%] ${scene.accent} blur-sm`} />
           </div>
         </div>
 

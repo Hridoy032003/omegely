@@ -41,6 +41,9 @@ const HEARTBEAT_MS = 3000; // re-announce hello this often
 const REMATCH_COOLDOWN_MS = 3000; // don't instantly re-pair with the peer you just left
 const MATCHMAKING_TIMEOUT_MS = 12000; // never leave Start looking frozen
 const CHANNEL_SETUP_TIMEOUT_MS = 8000;
+const COOLDOWN_KEEP_MS = 60_000; // forget who we skipped after a minute
+const MAX_INBOUND_CHARS = 1000; // a peer can't flood the chat log with one message
+const PEER_RECOVERY_GRACE_MS = 6000; // ICE often self-heals; only re-queue if it doesn't
 
 function withTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -107,6 +110,10 @@ export function useWebRTC() {
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
   const [starting, setStarting] = useState(false);
+  /** The chat data channel is open, so a typed message will actually be delivered. */
+  const [chatReady, setChatReady] = useState(false);
+  /** The peer connection is struggling but has not been given up on yet. */
+  const [peerUnstable, setPeerUnstable] = useState(false);
 
   // --- Refs (async callbacks must never read stale React state) -------------
   const statusRef = useRef<Status>("idle");
@@ -130,6 +137,9 @@ export function useWebRTC() {
   const helloTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startInFlightRef = useRef(false);
   const connectionEventRef = useRef<string | null>(null);
+  const recoveryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Set once `onPartnerLeft` exists; lets the peer connection re-queue us on failure. */
+  const peerFailureRef = useRef<(() => void) | null>(null);
 
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -189,7 +199,15 @@ export function useWebRTC() {
   const wireDataChannel = useCallback(
     (channel: RTCDataChannel) => {
       dcRef.current = channel;
-      channel.onmessage = (event) => addMessage("them", String(event.data));
+      setChatReady(channel.readyState === "open");
+      channel.onopen = () => setChatReady(true);
+      channel.onclose = () => setChatReady(false);
+      channel.onerror = () => setChatReady(false);
+      channel.onmessage = (event) => {
+        // Trust nothing about size: the peer controls this string.
+        const text = String(event.data).slice(0, MAX_INBOUND_CHARS).trim();
+        if (text) addMessage("them", text);
+      };
     },
     [addMessage],
   );
@@ -205,12 +223,25 @@ export function useWebRTC() {
   }, []);
 
   const teardownPeer = useCallback(() => {
-    dcRef.current?.close();
-    dcRef.current = null;
+    if (recoveryTimerRef.current) {
+      clearTimeout(recoveryTimerRef.current);
+      recoveryTimerRef.current = null;
+    }
+    if (dcRef.current) {
+      dcRef.current.onopen = null;
+      dcRef.current.onclose = null;
+      dcRef.current.onerror = null;
+      dcRef.current.onmessage = null;
+      dcRef.current.close();
+      dcRef.current = null;
+    }
+    setChatReady(false);
+    setPeerUnstable(false);
     if (pcRef.current) {
       pcRef.current.ontrack = null;
       pcRef.current.onicecandidate = null;
       pcRef.current.ondatachannel = null;
+      pcRef.current.onconnectionstatechange = null;
       pcRef.current.close();
       pcRef.current = null;
     }
@@ -237,6 +268,35 @@ export function useWebRTC() {
         const [remoteStream] = event.streams;
         if (remoteVideoRef.current && remoteStream) {
           remoteVideoRef.current.srcObject = remoteStream;
+        }
+      };
+
+      // Without this, a dropped or blocked connection (no TURN relay, carrier
+      // NAT, sleeping laptop) leaves the UI showing "connected" over a black
+      // frame with no way out but a manual Next.
+      pc.onconnectionstatechange = () => {
+        if (pcRef.current !== pc) return;
+        const state = pc.connectionState;
+
+        if (recoveryTimerRef.current) {
+          clearTimeout(recoveryTimerRef.current);
+          recoveryTimerRef.current = null;
+        }
+
+        if (state === "connected") {
+          setPeerUnstable(false);
+        } else if (state === "disconnected") {
+          // Usually transient — give ICE a chance to recover before re-queuing.
+          setPeerUnstable(true);
+          recoveryTimerRef.current = setTimeout(() => {
+            recoveryTimerRef.current = null;
+            if (pcRef.current === pc && pc.connectionState !== "connected") {
+              peerFailureRef.current?.();
+            }
+          }, PEER_RECOVERY_GRACE_MS);
+        } else if (state === "failed") {
+          setPeerUnstable(true);
+          peerFailureRef.current?.();
         }
       };
 
@@ -405,6 +465,11 @@ export function useWebRTC() {
   }, [maybeRequest]);
 
   const beginSearch = useCallback(() => {
+    const now = Date.now();
+    for (const [peerId, leftAt] of cooldownRef.current) {
+      if (now - leftAt > COOLDOWN_KEEP_MS) cooldownRef.current.delete(peerId);
+    }
+
     partnerRef.current = null;
     setPartnerCountry(null);
     setPartnerProfile(null);
@@ -424,6 +489,10 @@ export function useWebRTC() {
     partnerRef.current = null;
     beginSearch();
   }, [beginSearch, rewardCompletedConnection, teardownPeer]);
+
+  useEffect(() => {
+    peerFailureRef.current = onPartnerLeft;
+  }, [onPartnerLeft]);
 
   /** Route an inbound message on our private inbox channel. */
   const handleInbox = useCallback(
@@ -702,6 +771,8 @@ export function useWebRTC() {
     setPartnerCountry(null);
     setPartnerProfile(null);
     setOnlineCount(0);
+    setChatReady(false);
+    setPeerUnstable(false);
     setStatusBoth("idle");
   }, [clearPending, rewardCompletedConnection, sendTo, setStatusBoth, stopHello, teardownPeer]);
 
@@ -757,6 +828,8 @@ export function useWebRTC() {
     onlineCount,
     mediaError,
     starting,
+    chatReady,
+    peerUnstable,
     micOn,
     camOn,
     localVideoRef,

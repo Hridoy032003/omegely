@@ -12,7 +12,6 @@ import {
   Mic,
   ShieldCheck,
   Sparkles,
-  Star,
   Users,
   Video,
   X,
@@ -21,9 +20,9 @@ import {
 
 const STATS = [
   { value: "0", label: "Sign-ups required" },
-  { value: "<3s", label: "Time to first match" },
-  { value: "100%", label: "Peer-to-peer" },
-  { value: "100 = $1", label: "Coin value" },
+  { value: "1:1", label: "Always one stranger" },
+  { value: "100%", label: "Peer-to-peer media" },
+  { value: "100 coins", label: "= $1 reward value" },
 ];
 
 const FEATURES = [
@@ -67,6 +66,29 @@ const COMPARISON = [
   { label: "Works in the browser, no install", us: true, them: true },
   { label: "No intrusive ads", us: true, them: false },
   { label: "Free forever", us: true, them: false },
+];
+
+const PROMISES = [
+  {
+    icon: EyeOff,
+    title: "No account to chat",
+    body: "The chat route needs no profile, no email, and no verification step. Sign-up only exists for referral rewards.",
+  },
+  {
+    icon: Lock,
+    title: "Nothing recorded",
+    body: "There is no recording path in the product. Video, audio and chat never reach a server we operate.",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Encrypted in transit",
+    body: "WebRTC mandates DTLS and SRTP, so media and chat are encrypted between the two devices by default.",
+  },
+  {
+    icon: Zap,
+    title: "One click to leave",
+    body: "Next drops the current stranger immediately and finds another. Stop ends the session and releases your camera.",
+  },
 ];
 
 const STEPS = [
@@ -358,51 +380,28 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ---------------- SOCIAL PROOF ---------------- */}
-        <section className="border-t border-white/10 py-20 md:py-28">
+        {/* ---------------- GUARANTEES ---------------- */}
+        <section className="border-t border-line py-20 md:py-28">
           <div className="container-page">
             <SectionHeading
-              eyebrow="Loved by curious people"
-              title="A friendlier way to meet the world"
+              eyebrow="What we promise"
+              title="Four things that never change"
+              subtitle="Not marketing lines — these are properties of how the app is built."
             />
-            <div className="mt-14 grid gap-4 md:grid-cols-3">
-              {[
-                {
-                  quote:
-                    "Finally a random chat that isn't covered in ads. It just works and it's genuinely fun.",
-                  name: "Ava R.",
-                  role: "Student",
-                },
-                {
-                  quote:
-                    "The fact that nothing is stored made me actually comfortable using it. Clean and fast.",
-                  name: "Marco D.",
-                  role: "Designer",
-                },
-                {
-                  quote:
-                    "I practiced a new language with strangers all over the world. Matching is instant.",
-                  name: "Priya S.",
-                  role: "Traveler",
-                },
-              ].map((t) => (
-                <figure
-                  key={t.name}
-                  className="rounded-2xl border border-white/10 bg-white/[0.02] p-6"
+            <div className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {PROMISES.map((promise) => (
+                <div
+                  key={promise.title}
+                  className="rounded-card border border-line bg-white/[0.02] p-6"
                 >
-                  <div className="flex gap-0.5 text-amber-400">
-                    {Array.from({ length: 5 }).map((_, i) => (
-                      <Star key={i} className="h-4 w-4" />
-                    ))}
-                  </div>
-                  <blockquote className="mt-4 text-sm leading-relaxed text-neutral-200">
-                    “{t.quote}”
-                  </blockquote>
-                  <figcaption className="mt-5 text-sm">
-                    <span className="font-medium text-white">{t.name}</span>
-                    <span className="text-neutral-500"> · {t.role}</span>
-                  </figcaption>
-                </figure>
+                  <span className="flex h-10 w-10 items-center justify-center rounded-control bg-brand-soft text-brand-ink ring-1 ring-inset ring-white/10">
+                    <promise.icon className="h-5 w-5" />
+                  </span>
+                  <h3 className="mt-5 font-display text-base font-semibold text-ink">
+                    {promise.title}
+                  </h3>
+                  <p className="mt-2 text-sm leading-relaxed text-ink-3">{promise.body}</p>
+                </div>
               ))}
             </div>
           </div>
@@ -440,7 +439,7 @@ export default function Home() {
                 Someone interesting is online right now.
               </h2>
               <p className="mx-auto mt-4 max-w-xl text-neutral-300">
-                Chat for free, or create an account and earn 1 coin worth $1 for every successful referral.
+                Chat for free, or create an account and earn 100 coins — worth $1 — for every successful referral.
               </p>
               <Link
                 href="/chat"

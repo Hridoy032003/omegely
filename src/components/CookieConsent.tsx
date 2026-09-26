@@ -3,34 +3,32 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Cookie } from "@/components/icons";
-
-const STORAGE_KEY = "rt-cookie-consent";
+import { CONSENT_EVENT, CONSENT_KEY, readConsent, type ConsentChoice } from "@/lib/consent";
+import { Button } from "@/components/ui";
 
 /**
- * Minimal, honest cookie banner. Omegley only uses a single essential
- * localStorage flag (this consent choice) plus the ephemeral tokens the
- * realtime service needs — no tracking/advertising cookies — so the choices are
- * "Accept" or "Essential only". We persist the decision and never re-ask.
+ * Minimal, honest cookie banner. Omegley stores one essential localStorage flag
+ * (this choice) plus the ephemeral tokens the realtime service needs — no
+ * tracking or advertising cookies — so the options are "Accept" or
+ * "Essential only". The decision is persisted and never re-asked.
+ *
+ * Owns the bottom of the viewport while visible: `useConsentResolved` keeps the
+ * install prompt and feedback launcher out of the way until it is dismissed.
  */
 export default function CookieConsent() {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    try {
-      if (!localStorage.getItem(STORAGE_KEY)) setVisible(true);
-    } catch {
-      /* storage blocked — don't block the app */
-    }
+    if (readConsent() === null) setVisible(true);
   }, []);
 
-  const choose = (value: "accepted" | "essential") => {
+  const choose = (value: ConsentChoice) => {
     try {
-      localStorage.setItem(STORAGE_KEY, value);
+      window.localStorage.setItem(CONSENT_KEY, value);
     } catch {
-      /* ignore */
+      /* storage blocked — the choice just isn't remembered */
     }
-    // Let analytics (PostHog) start the moment the user accepts.
-    window.dispatchEvent(new CustomEvent("rt-consent", { detail: value }));
+    window.dispatchEvent(new CustomEvent(CONSENT_EVENT, { detail: value }));
     setVisible(false);
   };
 
@@ -40,35 +38,29 @@ export default function CookieConsent() {
     <div
       role="dialog"
       aria-label="Cookie notice"
-      className="fixed inset-x-3 bottom-3 z-[60] mx-auto max-w-3xl animate-fadeUp rounded-2xl border border-white/10 bg-neutral-900/90 p-4 shadow-2xl shadow-black/50 backdrop-blur-xl sm:p-5"
+      className="fixed inset-x-3 bottom-3 z-[60] mx-auto max-w-3xl animate-fadeUp rounded-panel border border-line bg-panel/95 p-4 shadow-2xl shadow-black/50 backdrop-blur-xl sm:p-5"
     >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
         <div className="flex items-start gap-3">
-          <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-500/15 text-indigo-300">
+          <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-control bg-brand-soft text-brand-ink">
             <Cookie className="h-5 w-5" />
           </span>
-          <p className="text-sm leading-relaxed text-neutral-300">
-            We use only <span className="font-medium text-white">essential</span>{" "}
-            storage to keep Omegley working — no ads, no tracking. Read our{" "}
-            <Link href="/cookies" className="cursor-pointer text-indigo-300 underline underline-offset-2 hover:text-indigo-200">
+          <p className="text-sm leading-relaxed text-ink-2">
+            We use only <span className="font-medium text-ink">essential</span> storage to keep
+            Omegley working — no ads, no tracking. Read our{" "}
+            <Link href="/cookies" className="text-brand-ink underline underline-offset-2 hover:text-ink">
               Cookie Policy
             </Link>
             .
           </p>
         </div>
         <div className="flex shrink-0 gap-2 sm:ml-auto">
-          <button
-            onClick={() => choose("essential")}
-            className="flex-1 cursor-pointer rounded-full border border-white/15 px-4 py-2 text-sm font-medium text-neutral-200 transition hover:bg-white/5 sm:flex-none"
-          >
+          <Button variant="outline" size="sm" className="flex-1 sm:flex-none" onClick={() => choose("essential")}>
             Essential only
-          </button>
-          <button
-            onClick={() => choose("accepted")}
-            className="flex-1 cursor-pointer rounded-full bg-white px-5 py-2 text-sm font-semibold text-neutral-950 transition hover:bg-neutral-200 sm:flex-none"
-          >
+          </Button>
+          <Button size="sm" className="flex-1 sm:flex-none" onClick={() => choose("accepted")}>
             Accept
-          </button>
+          </Button>
         </div>
       </div>
     </div>

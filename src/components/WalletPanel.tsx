@@ -3,8 +3,23 @@
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import type { User } from "@supabase/supabase-js";
-import { LogoMark } from "@/components/logo";
 import { supabase } from "@/lib/supabase-browser";
+import { ArrowRight } from "@/components/icons";
+import { LogoMark } from "@/components/logo";
+import {
+  AppHeader,
+  Badge,
+  Button,
+  CONTROL,
+  Field,
+  Notice,
+  PageGlow,
+  PageHeading,
+  Panel,
+  PanelHead,
+  Stat,
+  buttonClass,
+} from "@/components/ui";
 
 type WalletProfile = {
   displayName: string;
@@ -14,12 +29,7 @@ type WalletProfile = {
   reservedCoins: number;
 };
 
-type CoinTransaction = {
-  id: string;
-  amount: number;
-  description: string;
-  created_at: string;
-};
+type CoinTransaction = { id: string; amount: number; description: string; created_at: string };
 
 type WithdrawalRequest = {
   id: string;
@@ -40,6 +50,13 @@ const EMPTY_WALLET: WalletProfile = {
   reservedCoins: 0,
 };
 
+const STATUS_TONE = {
+  paid: "positive",
+  approved: "positive",
+  pending: "caution",
+  rejected: "critical",
+} as const;
+
 function nameFromUser(user: User) {
   const metadata = user.user_metadata ?? {};
   if (typeof metadata.full_name === "string" && metadata.full_name.trim()) return metadata.full_name;
@@ -48,7 +65,9 @@ function nameFromUser(user: User) {
 }
 
 function formatDate(value: string) {
-  return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(new Date(value));
+  return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(
+    new Date(value),
+  );
 }
 
 function formatCoins(value: number) {
@@ -59,29 +78,72 @@ function formatDollars(coins: number) {
   return (coins / COINS_PER_DOLLAR).toLocaleString(undefined, { style: "currency", currency: "USD" });
 }
 
-function WalletIcon({ name }: { name: "coins" | "chat" | "referral" | "bonus" | "redeem" | "history" }) {
-  const paths = {
-    coins: <><ellipse cx="12" cy="6" rx="7" ry="3" /><path d="M5 6v5c0 1.7 3.1 3 7 3s7-1.3 7-3V6" /><path d="M5 11v5c0 1.7 3.1 3 7 3s7-1.3 7-3v-5" /></>,
-    chat: <><path d="M20 14a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h9a4 4 0 0 1 4 4Z" /><path d="M8 9h8M8 13h5" /></>,
-    referral: <><circle cx="9" cy="8" r="3" /><path d="M3 19c.5-3.4 2.5-5 6-5s5.5 1.6 6 5M17 8h4M19 6v4" /></>,
-    bonus: <><path d="m12 3 1.7 5.3H19l-4.3 3.2 1.6 5.3-4.3-3.2-4.3 3.2 1.6-5.3L5 8.3h5.3Z" /><path d="M18 17v4M16 19h4" /></>,
-    redeem: <><rect x="3" y="6" width="18" height="13" rx="3" /><path d="M3 10h18M16 15h2" /></>,
-    history: <><path d="M4 12a8 8 0 1 0 2.3-5.7L4 8.6" /><path d="M4 4v4.6h4.6M12 8v4l3 2" /></>,
-  };
-
-  return <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>;
+function WalletIcon({ name, className = "h-[18px] w-[18px]" }: { name: keyof typeof ICON_PATHS; className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      {ICON_PATHS[name]}
+    </svg>
+  );
 }
+
+const ICON_PATHS = {
+  coins: (
+    <>
+      <ellipse cx="12" cy="6" rx="7" ry="3" />
+      <path d="M5 6v5c0 1.7 3.1 3 7 3s7-1.3 7-3V6" />
+      <path d="M5 11v5c0 1.7 3.1 3 7 3s7-1.3 7-3v-5" />
+    </>
+  ),
+  chat: (
+    <>
+      <path d="M20 14a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h9a4 4 0 0 1 4 4Z" />
+      <path d="M8 9h8M8 13h5" />
+    </>
+  ),
+  referral: (
+    <>
+      <circle cx="9" cy="8" r="3" />
+      <path d="M3 19c.5-3.4 2.5-5 6-5s5.5 1.6 6 5M17 8h4M19 6v4" />
+    </>
+  ),
+  bonus: (
+    <>
+      <path d="m12 3 1.7 5.3H19l-4.3 3.2 1.6 5.3-4.3-3.2-4.3 3.2 1.6-5.3L5 8.3h5.3Z" />
+      <path d="M18 17v4M16 19h4" />
+    </>
+  ),
+  redeem: (
+    <>
+      <rect x="3" y="6" width="18" height="13" rx="3" />
+      <path d="M3 10h18M16 15h2" />
+    </>
+  ),
+  history: (
+    <>
+      <path d="M4 12a8 8 0 1 0 2.3-5.7L4 8.6" />
+      <path d="M4 4v4.6h4.6M12 8v4l3 2" />
+    </>
+  ),
+} as const;
 
 export default function WalletPanel() {
   const [user, setUser] = useState<User | null>(null);
   const [wallet, setWallet] = useState<WalletProfile>(EMPTY_WALLET);
   const [transactions, setTransactions] = useState<CoinTransaction[]>([]);
   const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([]);
-  const [activeTab, setActiveTab] = useState<"add" | "redeem">("add");
+  const [activeTab, setActiveTab] = useState<"earn" | "redeem">("earn");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState("");
-  const [noticeKind, setNoticeKind] = useState<"success" | "error">("success");
+  const [notice, setNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const [copied, setCopied] = useState(false);
   const [withdrawalAmount, setWithdrawalAmount] = useState(String(DEFAULT_WITHDRAWAL_MINIMUM));
   const [withdrawalMinimum, setWithdrawalMinimum] = useState(DEFAULT_WITHDRAWAL_MINIMUM);
@@ -118,7 +180,8 @@ export default function WalletPanel() {
     ]);
 
     const profile = profileResult.data;
-    const referralCode = profile?.referral_code || currentUser.id.replaceAll("-", "").slice(0, 10).toLowerCase();
+    const referralCode =
+      profile?.referral_code || currentUser.id.replaceAll("-", "").slice(0, 10).toLowerCase();
     setWallet({
       displayName: profile?.display_name || nameFromUser(currentUser),
       referralCode,
@@ -131,9 +194,14 @@ export default function WalletPanel() {
 
     const publicSettings = Array.isArray(settingsResult.data) ? settingsResult.data[0] : settingsResult.data;
     if (publicSettings) {
-      const minimum = Number(publicSettings.withdrawal_minimum_coins ?? DEFAULT_WITHDRAWAL_MINIMUM);
-      setWithdrawalMinimum(minimum);
-      setWithdrawalAmount((current) => Number(current) === DEFAULT_WITHDRAWAL_MINIMUM ? String(minimum) : current);
+      const minimum = Number(publicSettings.withdrawal_minimum_coins);
+      // Guard the divisor: a missing or zero threshold would make the progress
+      // bar NaN and let a zero-coin request through.
+      const safeMinimum = Number.isFinite(minimum) && minimum > 0 ? minimum : DEFAULT_WITHDRAWAL_MINIMUM;
+      setWithdrawalMinimum(safeMinimum);
+      setWithdrawalAmount((current) =>
+        Number(current) === DEFAULT_WITHDRAWAL_MINIMUM ? String(safeMinimum) : current,
+      );
       setWithdrawalsEnabled(Boolean(publicSettings.withdrawals_enabled));
     }
 
@@ -183,6 +251,7 @@ export default function WalletPanel() {
 
   const availableCoins = Math.max(0, wallet.coinBalance - wallet.reservedCoins);
   const redemptionProgress = Math.min(100, (availableCoins / withdrawalMinimum) * 100);
+  const canRedeem = availableCoins >= withdrawalMinimum;
   const referralUrl = useMemo(() => {
     if (!wallet.referralCode) return "";
     const origin = typeof window === "undefined" ? "https://www.omegley.in" : window.location.origin;
@@ -196,8 +265,7 @@ export default function WalletPanel() {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2200);
     } catch {
-      setNoticeKind("error");
-      setNotice("Could not copy automatically. Select the link and copy it manually.");
+      setNotice({ tone: "error", text: "Could not copy automatically. Select the link and copy it manually." });
     }
   };
 
@@ -206,13 +274,19 @@ export default function WalletPanel() {
     if (!user || busy) return;
     const amount = Number(withdrawalAmount);
     if (!Number.isFinite(amount) || amount < withdrawalMinimum) {
-      setNoticeKind("error");
-      setNotice(`Enter at least ${formatCoins(withdrawalMinimum)} coins.`);
+      setNotice({ tone: "error", text: `Enter at least ${formatCoins(withdrawalMinimum)} coins.` });
+      return;
+    }
+    if (amount > availableCoins) {
+      setNotice({
+        tone: "error",
+        text: `You have ${formatCoins(availableCoins)} coins available to redeem.`,
+      });
       return;
     }
 
     setBusy(true);
-    setNotice("");
+    setNotice(null);
     const { data: requestId, error } = await supabase.rpc("request_withdrawal", {
       p_amount_coins: amount,
       p_method: withdrawalMethod,
@@ -220,169 +294,482 @@ export default function WalletPanel() {
     });
 
     if (error || !requestId) {
-      setNoticeKind("error");
-      setNotice(error?.message || "This request could not be submitted. Check your available balance and try again.");
+      setNotice({
+        tone: "error",
+        text: error?.message || "This request could not be submitted. Check your available balance and try again.",
+      });
     } else {
-      setNoticeKind("success");
-      setNotice("Your redemption request was sent for admin review.");
+      setNotice({ tone: "success", text: "Your redemption request was sent for admin review." });
       setWithdrawalDestination("");
       await loadWallet(user);
     }
     setBusy(false);
   };
 
+  if (loading) {
+    return (
+      <main className="min-h-dvh">
+        <PageGlow />
+        <AppHeader />
+        <div className="flex min-h-[60vh] items-center justify-center gap-4" aria-live="polite">
+          <LogoMark className="h-10 w-10 animate-pulseGlow" title="Omegley" />
+          <div>
+            <p className="font-medium text-ink">Opening your wallet</p>
+            <p className="mt-1 text-sm text-ink-3">Loading your latest balance…</p>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  if (!user) {
+    return (
+      <main className="min-h-dvh">
+        <PageGlow />
+        <AppHeader />
+        <div className="container-page grid items-center gap-12 py-16 lg:grid-cols-[1.15fr_0.85fr] lg:gap-20 lg:py-24">
+          <div>
+            <p className="eyebrow">Omegley rewards</p>
+            <h1 className="mt-4 font-display text-4xl font-extrabold leading-[1.05] tracking-tight text-ink sm:text-5xl">
+              Your conversations can <span className="gradient-text">add up.</span>
+            </h1>
+            <p className="mt-6 max-w-lg text-base leading-relaxed text-ink-2">
+              Sign in to collect your chat rewards, share your referral link, and redeem your balance
+              from one place.
+            </p>
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <Link href="/account?mode=login" className={buttonClass({ size: "lg" })}>
+                Sign in to wallet
+                <ArrowRight className="h-5 w-5" />
+              </Link>
+              <Link href="/account?mode=signup" className={buttonClass({ variant: "outline", size: "lg" })}>
+                Create an account
+              </Link>
+            </div>
+            <p className="mt-6 text-2xs text-ink-4">100 coins = $1 estimated reward value</p>
+          </div>
+
+          <Panel tone="brand" className="p-6 sm:p-7">
+            <div className="flex items-center justify-between gap-4">
+              {/* Labelled as an example so a signed-out visitor never reads it as a balance. */}
+              <Badge tone="neutral">Example wallet</Badge>
+              <WalletIcon name="coins" className="h-6 w-6 text-brand-ink" />
+            </div>
+            <p className="mt-6 font-display text-4xl font-semibold tracking-tight text-ink">
+              1,250 <span className="text-base font-medium text-ink-3">coins</span>
+            </p>
+            <p className="mt-1 text-sm text-ink-3">$12.50 estimated value</p>
+            <div className="mt-6 border-t border-line">
+              <PreviewRow label="Complete a connection" value="+10" />
+              <PreviewRow label="Successful referral" value="+100" />
+            </div>
+          </Panel>
+        </div>
+      </main>
+    );
+  }
+
   return (
-    <main className="wallet-page">
-      <header className="wallet-nav">
-        <Link href="/" className="wallet-brand"><LogoMark className="h-8 w-8" title="Omegley" /><span>Omegley</span></Link>
-        <nav aria-label="Wallet navigation">
-          <Link href="/account">Account</Link>
-          <Link href="/chat" className="wallet-nav-primary">Start chatting <span aria-hidden="true">→</span></Link>
-        </nav>
-      </header>
+    <main className="min-h-dvh">
+      <PageGlow />
+      <AppHeader
+        links={
+          <Link href="/account" className="hidden text-sm text-ink-2 transition-colors hover:text-ink sm:inline">
+            Account
+          </Link>
+        }
+      />
 
-      {loading ? (
-        <section className="wallet-loading" aria-live="polite">
-          <LogoMark className="h-10 w-10" title="Omegley" />
-          <div><strong>Opening your wallet</strong><span>Loading your latest balance…</span></div>
-        </section>
-      ) : !user ? (
-        <section className="wallet-gate">
-          <div className="wallet-gate-copy">
-            <span className="wallet-kicker"><i /> OMEGLEY REWARDS</span>
-            <h1>Your conversations can <span>add up.</span></h1>
-            <p>Sign in to collect your chat rewards, share your referral link, and redeem your balance from one secure wallet.</p>
-            <div className="wallet-gate-actions">
-              <Link href="/account?mode=login" className="wallet-main-button">Sign in to wallet <span>→</span></Link>
-              <Link href="/account?mode=signup" className="wallet-secondary-button">Create an account</Link>
+      <div className="container-page py-12 md:py-16">
+        <PageHeading
+          label="Wallet & rewards"
+          title="Make every connection count."
+          lede={`Welcome back, ${wallet.displayName.split(" ")[0]}. Earn, track, and redeem your Omegley coins.`}
+          aside={
+            <div className="border-line sm:border-l sm:pl-5">
+              <p className="font-display text-lg font-semibold text-ink">100 coins</p>
+              <p className="text-sm text-ink-3">= $1 reward value</p>
             </div>
-            <small>100 coins = $1 estimated reward value</small>
-          </div>
-          <div className="wallet-gate-preview" aria-label="Wallet reward preview">
-            <div className="wallet-preview-top"><span>Available balance</span><WalletIcon name="coins" /></div>
-            <strong>1,250 <small>coins</small></strong>
-            <p>$12.50 estimated value</p>
-            <div className="wallet-preview-rule" />
-            <div className="wallet-preview-row"><span>Complete a connection</span><b>+10</b></div>
-            <div className="wallet-preview-row"><span>Successful referral</span><b>+100</b></div>
-          </div>
-        </section>
-      ) : (
-        <div className="wallet-shell">
-          <section className="wallet-heading">
-            <div>
-              <span className="wallet-kicker"><i /> WALLET &amp; REWARDS</span>
-              <h1>Make every connection count.</h1>
-              <p>Welcome back, {wallet.displayName.split(" ")[0]}. Earn, track, and redeem your Omegley coins.</p>
-            </div>
-            <div className="wallet-value-note"><strong>100 coins</strong><span>= $1 reward value</span></div>
-          </section>
+          }
+        />
 
-          <section className="wallet-balance-card">
-            <div className="wallet-balance-main">
-              <span className="wallet-balance-label"><WalletIcon name="coins" /> Available balance</span>
-              <div><strong>{formatCoins(availableCoins)}</strong><span>coins</span></div>
-              <p>{formatDollars(availableCoins)} estimated reward value</p>
-            </div>
-            <div className="wallet-stat"><span>Lifetime earned</span><strong>{formatCoins(wallet.totalEarned)}</strong><small>{formatDollars(wallet.totalEarned)}</small></div>
-            <div className="wallet-stat"><span>Pending redemption</span><strong>{formatCoins(wallet.reservedCoins)}</strong><small>{formatDollars(wallet.reservedCoins)}</small></div>
-            <div className="wallet-balance-action"><span>Next reward</span><strong>+10 coins</strong><Link href="/chat">Start a connection <span>→</span></Link></div>
-          </section>
-
-          <div className="wallet-tabs" role="tablist" aria-label="Wallet actions">
-            <button type="button" role="tab" aria-selected={activeTab === "add"} className={activeTab === "add" ? "active" : ""} onClick={() => { setActiveTab("add"); setNotice(""); }}><span>＋</span><div><strong>Add coins</strong><small>Earn through Omegley</small></div></button>
-            <button type="button" role="tab" aria-selected={activeTab === "redeem"} className={activeTab === "redeem" ? "active" : ""} onClick={() => { setActiveTab("redeem"); setNotice(""); }}><span>↗</span><div><strong>Redeem</strong><small>Request a payout</small></div></button>
+        <Panel tone="brand" className="mt-10 grid gap-8 p-6 sm:grid-cols-2 sm:p-7 lg:grid-cols-4">
+          <div>
+            <p className="flex items-center gap-2 text-2xs font-semibold uppercase tracking-[0.14em] text-brand-ink">
+              <WalletIcon name="coins" /> Available balance
+            </p>
+            <p className="mt-3 flex items-baseline gap-2">
+              <span className="font-display text-4xl font-semibold tracking-tight text-ink">
+                {formatCoins(availableCoins)}
+              </span>
+              <span className="text-sm text-ink-3">coins</span>
+            </p>
+            <p className="mt-1 text-sm text-ink-3">{formatDollars(availableCoins)} estimated value</p>
           </div>
+          <Stat label="Lifetime earned" value={formatCoins(wallet.totalEarned)} sub={formatDollars(wallet.totalEarned)} />
+          <Stat
+            label="Pending redemption"
+            value={formatCoins(wallet.reservedCoins)}
+            sub={formatDollars(wallet.reservedCoins)}
+          />
+          <div>
+            <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-ink-3">Next reward</p>
+            <p className="mt-2 font-display text-2xl font-semibold tracking-tight text-ink">+10 coins</p>
+            <Link
+              href="/chat"
+              className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-brand-ink transition-colors hover:text-ink"
+            >
+              Start a connection
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+        </Panel>
 
-          {activeTab === "add" ? (
-            <div className="wallet-content-grid" role="tabpanel">
-              <section className="wallet-panel wallet-earn-panel">
-                <div className="wallet-panel-heading"><div><span className="wallet-section-label">WAYS TO EARN</span><h2>Add coins to your wallet</h2><p>Your rewards are added automatically after each eligible event.</p></div></div>
-                <div className="wallet-earning-list">
-                  <article>
-                    <span className="wallet-list-icon violet"><WalletIcon name="chat" /></span>
-                    <div><h3>Complete a connection</h3><p>Connect with someone in random chat. There is no minimum duration.</p><Link href="/chat">Start chatting <span>→</span></Link></div>
-                    <strong>+10 <small>coins</small></strong>
-                  </article>
-                  <article>
-                    <span className="wallet-list-icon blue"><WalletIcon name="referral" /></span>
-                    <div><h3>Invite a friend</h3><p>Earn after a new member creates an account using your personal link.</p></div>
-                    <strong>+100 <small>coins</small></strong>
-                  </article>
-                  <article>
-                    <span className="wallet-list-icon amber"><WalletIcon name="bonus" /></span>
-                    <div><h3>Community bonuses</h3><p>Promotions and admin-awarded bonuses appear directly in your wallet history.</p></div>
-                    <strong>Variable</strong>
-                  </article>
+        <div
+          role="tablist"
+          aria-label="Wallet actions"
+          className="mt-8 grid w-full max-w-lg grid-cols-2 gap-1 rounded-card border border-line bg-white/[0.02] p-1"
+        >
+          {(
+            [
+              { id: "earn", title: "Add coins", sub: "Earn through Omegley" },
+              { id: "redeem", title: "Redeem", sub: "Request a payout" },
+            ] as const
+          ).map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === tab.id}
+              onClick={() => {
+                setActiveTab(tab.id);
+                setNotice(null);
+              }}
+              className={`rounded-control px-4 py-2.5 text-left transition ${
+                activeTab === tab.id ? "bg-panel-hi text-ink shadow-lg shadow-black/20" : "text-ink-3 hover:text-ink"
+              }`}
+            >
+              <span className="block text-sm font-semibold">{tab.title}</span>
+              <span className="mt-0.5 block text-2xs text-ink-4">{tab.sub}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(300px,1fr)]" role="tabpanel">
+          {activeTab === "earn" ? (
+            <>
+              <Panel className="p-6 sm:p-7">
+                <PanelHead
+                  label="Ways to earn"
+                  title="Add coins to your wallet"
+                  description="Your rewards are added automatically after each eligible event."
+                />
+                <div className="mt-6 border-t border-line">
+                  <EarnRow
+                    icon="chat"
+                    tone="text-brand-ink bg-brand-soft"
+                    title="Complete a connection"
+                    body="Connect with someone in random chat. There is no minimum duration."
+                    reward="+10"
+                    href="/chat"
+                    hrefLabel="Start chatting"
+                  />
+                  <EarnRow
+                    icon="referral"
+                    tone="text-sky-300 bg-sky-400/10"
+                    title="Invite a friend"
+                    body="Earn after a new member creates an account using your personal link."
+                    reward="+100"
+                  />
+                  <EarnRow
+                    icon="bonus"
+                    tone="text-caution bg-caution/10"
+                    title="Community bonuses"
+                    body="Promotions and admin-awarded bonuses appear directly in your wallet history."
+                    reward="Variable"
+                  />
                 </div>
-              </section>
+              </Panel>
 
-              <aside className="wallet-side-stack">
-                <section className="wallet-panel wallet-referral-panel">
-                  <span className="wallet-section-label">YOUR REFERRAL LINK</span>
-                  <h2>Invite friends. Earn together.</h2>
-                  <p>Share your personal link. You receive 100 coins when an eligible friend joins.</p>
-                  <label htmlFor="wallet-referral-link">Personal invite link</label>
-                  <div className="wallet-copy-field"><input id="wallet-referral-link" readOnly value={referralUrl} /><button type="button" onClick={() => void copyReferralLink()}>{copied ? "Copied ✓" : "Copy link"}</button></div>
-                  <span className={`wallet-copy-message ${copied ? "visible" : ""}`} aria-live="polite">{copied ? "Copied to clipboard" : "Your referral code is ready to share."}</span>
-                </section>
-                <TransactionHistory transactions={transactions} />
-              </aside>
-            </div>
-          ) : (
-            <div className="wallet-content-grid" role="tabpanel">
-              <section className="wallet-panel wallet-redeem-panel">
-                <div className="wallet-panel-heading"><div><span className="wallet-section-label">REDEEM COINS</span><h2>Request your reward</h2><p>Choose a delivery method and submit your request for admin review.</p></div><span className="wallet-list-icon green"><WalletIcon name="redeem" /></span></div>
-
-                <div className="wallet-redemption-progress">
-                  <div><span>Progress to minimum</span><strong>{formatCoins(availableCoins)} / {formatCoins(withdrawalMinimum)} coins</strong></div>
-                  <div className="wallet-progress-track"><span style={{ width: `${redemptionProgress}%` }} /></div>
-                  <p>{availableCoins >= withdrawalMinimum ? "You have enough coins to submit a request." : `${formatCoins(withdrawalMinimum - availableCoins)} more coins needed to redeem.`}</p>
-                </div>
-
-                <form className="wallet-redeem-form" onSubmit={requestWithdrawal}>
-                  <div className="wallet-form-row">
-                    <label>Coins to redeem<input required type="number" min={withdrawalMinimum} step="100" value={withdrawalAmount} onChange={(event) => setWithdrawalAmount(event.target.value)} /></label>
-                    <label>Reward method<select value={withdrawalMethod} onChange={(event) => setWithdrawalMethod(event.target.value as "gift_card" | "cash_pending")}><option value="gift_card">Omegley gift card</option><option value="cash_pending">Cash payout (review)</option></select></label>
+              <div className="grid gap-6">
+                <Panel tone="brand" className="p-6">
+                  <PanelHead
+                    label="Your referral link"
+                    title="Invite friends. Earn together."
+                    description="Share your personal link. You receive 100 coins when an eligible friend joins."
+                  />
+                  <div className="mt-5">
+                    <Field label="Personal invite link" htmlFor="wallet-referral-link">
+                      <div className="flex gap-2">
+                        <input
+                          id="wallet-referral-link"
+                          readOnly
+                          value={referralUrl}
+                          className={`${CONTROL} text-2xs`}
+                        />
+                        <Button type="button" size="sm" onClick={() => void copyReferralLink()}>
+                          {copied ? "Copied" : "Copy"}
+                        </Button>
+                      </div>
+                    </Field>
+                    <p className="mt-2 text-2xs text-ink-4" aria-live="polite">
+                      {copied ? "Copied to clipboard." : " "}
+                    </p>
                   </div>
-                  <label>{withdrawalMethod === "gift_card" ? "Delivery email" : "Payout destination"}<input required minLength={3} type={withdrawalMethod === "gift_card" ? "email" : "text"} placeholder={withdrawalMethod === "gift_card" ? "you@example.com" : "Enter your payout details"} value={withdrawalDestination} onChange={(event) => setWithdrawalDestination(event.target.value)} /></label>
-                  <div className="wallet-form-summary"><span>Estimated reward</span><strong>{formatDollars(Number(withdrawalAmount) || 0)}</strong></div>
-                  <button className="wallet-main-button" disabled={busy || !withdrawalsEnabled || availableCoins < withdrawalMinimum} type="submit">{busy ? "Submitting…" : withdrawalsEnabled ? "Submit redemption request" : "Redemptions are temporarily paused"}</button>
-                  <small>Requests are reviewed before delivery. Coins remain reserved while a request is pending.</small>
-                  {notice && <p className={`wallet-notice ${noticeKind}`} role="status">{notice}</p>}
-                </form>
-              </section>
+                </Panel>
+                <HistoryPanel
+                  label="Recent activity"
+                  title="Coin history"
+                  empty="Your coin activity will appear here after your first reward."
+                  rows={transactions.map((transaction) => ({
+                    id: transaction.id,
+                    title: transaction.description,
+                    sub: formatDate(transaction.created_at),
+                    right: (
+                      <span
+                        className={`text-sm font-semibold ${
+                          transaction.amount >= 0 ? "text-positive" : "text-critical"
+                        }`}
+                      >
+                        {transaction.amount >= 0 ? "+" : ""}
+                        {formatCoins(transaction.amount)}
+                      </span>
+                    ),
+                  }))}
+                />
+              </div>
+            </>
+          ) : (
+            <>
+              <Panel className="p-6 sm:p-7">
+                <PanelHead
+                  label="Redeem coins"
+                  title="Request your reward"
+                  description="Choose a delivery method and submit your request for admin review."
+                  action={
+                    <span className="flex h-10 w-10 items-center justify-center rounded-control bg-positive/10 text-positive">
+                      <WalletIcon name="redeem" />
+                    </span>
+                  }
+                />
 
-              <aside className="wallet-side-stack">
-                <section className="wallet-panel wallet-rules-panel">
-                  <span className="wallet-section-label">REDEMPTION DETAILS</span>
-                  <h2>Before you redeem</h2>
-                  <ul><li><span>Minimum balance</span><strong>{formatCoins(withdrawalMinimum)} coins</strong></li><li><span>Current value</span><strong>100 coins = $1</strong></li><li><span>Review process</span><strong>Admin approval</strong></li></ul>
-                </section>
-                <WithdrawalHistory withdrawals={withdrawals} />
-              </aside>
-            </div>
+                <div className="mt-6 rounded-card border border-line bg-white/[0.02] p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <span className="text-sm text-ink-3">Progress to minimum</span>
+                    <span className="text-sm font-medium text-ink">
+                      {formatCoins(availableCoins)} / {formatCoins(withdrawalMinimum)} coins
+                    </span>
+                  </div>
+                  <div
+                    className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10"
+                    role="progressbar"
+                    aria-valuenow={Math.round(redemptionProgress)}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                  >
+                    <span
+                      className="block h-full rounded-full bg-gradient-to-r from-brand-hi to-brand"
+                      style={{ width: `${redemptionProgress}%` }}
+                    />
+                  </div>
+                  <p className="mt-2.5 text-2xs text-ink-4">
+                    {canRedeem
+                      ? "You have enough coins to submit a request."
+                      : `${formatCoins(withdrawalMinimum - availableCoins)} more coins needed to redeem.`}
+                  </p>
+                </div>
+
+                <form className="mt-6 grid gap-5" onSubmit={requestWithdrawal}>
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <Field label="Coins to redeem" htmlFor="redeem-amount">
+                      <input
+                        id="redeem-amount"
+                        className={CONTROL}
+                        required
+                        type="number"
+                        min={withdrawalMinimum}
+                        max={Math.max(withdrawalMinimum, availableCoins)}
+                        step="100"
+                        value={withdrawalAmount}
+                        onChange={(event) => setWithdrawalAmount(event.target.value)}
+                      />
+                    </Field>
+                    <Field label="Reward method" htmlFor="redeem-method">
+                      <select
+                        id="redeem-method"
+                        className={CONTROL}
+                        value={withdrawalMethod}
+                        onChange={(event) =>
+                          setWithdrawalMethod(event.target.value as "gift_card" | "cash_pending")
+                        }
+                      >
+                        <option value="gift_card">Omegley gift card</option>
+                        <option value="cash_pending">Cash payout (review)</option>
+                      </select>
+                    </Field>
+                  </div>
+
+                  <Field
+                    label={withdrawalMethod === "gift_card" ? "Delivery email" : "Payout destination"}
+                    htmlFor="redeem-destination"
+                  >
+                    <input
+                      id="redeem-destination"
+                      className={CONTROL}
+                      required
+                      minLength={3}
+                      type={withdrawalMethod === "gift_card" ? "email" : "text"}
+                      autoComplete={withdrawalMethod === "gift_card" ? "email" : "off"}
+                      placeholder={
+                        withdrawalMethod === "gift_card" ? "you@example.com" : "Enter your payout details"
+                      }
+                      value={withdrawalDestination}
+                      onChange={(event) => setWithdrawalDestination(event.target.value)}
+                    />
+                  </Field>
+
+                  <div className="flex items-center justify-between rounded-control bg-white/[0.03] px-4 py-3">
+                    <span className="text-sm text-ink-3">Estimated reward</span>
+                    <span className="font-medium text-ink">{formatDollars(Number(withdrawalAmount) || 0)}</span>
+                  </div>
+
+                  <Button type="submit" variant="brand" block disabled={busy || !withdrawalsEnabled || !canRedeem}>
+                    {busy
+                      ? "Submitting…"
+                      : withdrawalsEnabled
+                        ? "Submit redemption request"
+                        : "Redemptions are temporarily paused"}
+                  </Button>
+                  <p className="text-2xs leading-relaxed text-ink-4">
+                    Requests are reviewed before delivery. Coins remain reserved while a request is pending.
+                  </p>
+                  {notice && <Notice tone={notice.tone}>{notice.text}</Notice>}
+                </form>
+              </Panel>
+
+              <div className="grid gap-6">
+                <Panel className="p-6">
+                  <PanelHead label="Redemption details" title="Before you redeem" />
+                  <dl className="mt-5">
+                    <RuleRow label="Minimum balance" value={`${formatCoins(withdrawalMinimum)} coins`} />
+                    <RuleRow label="Current value" value="100 coins = $1" />
+                    <RuleRow label="Review process" value="Admin approval" />
+                  </dl>
+                </Panel>
+                <HistoryPanel
+                  label="Request history"
+                  title="Recent redemptions"
+                  empty="You have not submitted a redemption request yet."
+                  rows={withdrawals.map((withdrawal) => ({
+                    id: withdrawal.id,
+                    title: `${formatCoins(withdrawal.amount_coins)} coins · ${
+                      withdrawal.method === "gift_card" ? "Gift card" : "Cash payout"
+                    }`,
+                    sub: formatDate(withdrawal.created_at),
+                    right: <Badge tone={STATUS_TONE[withdrawal.status]}>{withdrawal.status}</Badge>,
+                  }))}
+                />
+              </div>
+            </>
           )}
         </div>
-      )}
+      </div>
     </main>
   );
 }
 
-function TransactionHistory({ transactions }: { transactions: CoinTransaction[] }) {
+function EarnRow({
+  icon,
+  tone,
+  title,
+  body,
+  reward,
+  href,
+  hrefLabel,
+}: {
+  icon: keyof typeof ICON_PATHS;
+  tone: string;
+  title: string;
+  body: string;
+  reward: string;
+  href?: string;
+  hrefLabel?: string;
+}) {
   return (
-    <section className="wallet-panel wallet-history-panel">
-      <div className="wallet-history-title"><span className="wallet-list-icon neutral"><WalletIcon name="history" /></span><div><span className="wallet-section-label">RECENT ACTIVITY</span><h2>Coin history</h2></div></div>
-      {transactions.length ? <div className="wallet-history-list">{transactions.map((transaction) => <div key={transaction.id}><span><strong>{transaction.description}</strong><small>{formatDate(transaction.created_at)}</small></span><b className={transaction.amount >= 0 ? "positive" : "negative"}>{transaction.amount >= 0 ? "+" : ""}{formatCoins(transaction.amount)}</b></div>)}</div> : <p className="wallet-empty">Your coin activity will appear here after your first reward.</p>}
-    </section>
+    <article className="flex items-start gap-4 border-b border-line py-5 last:border-b-0">
+      <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-control ${tone}`}>
+        <WalletIcon name={icon} />
+      </span>
+      <div className="min-w-0 flex-1">
+        <h3 className="text-sm font-semibold text-ink">{title}</h3>
+        <p className="mt-1.5 text-sm leading-relaxed text-ink-3">{body}</p>
+        {href && hrefLabel && (
+          <Link
+            href={href}
+            className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-brand-ink transition-colors hover:text-ink"
+          >
+            {hrefLabel}
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        )}
+      </div>
+      <span className="shrink-0 text-sm font-semibold whitespace-nowrap text-positive">{reward}</span>
+    </article>
   );
 }
 
-function WithdrawalHistory({ withdrawals }: { withdrawals: WithdrawalRequest[] }) {
+function HistoryPanel({
+  label,
+  title,
+  empty,
+  rows,
+}: {
+  label: string;
+  title: string;
+  empty: string;
+  rows: Array<{ id: string; title: string; sub: string; right: React.ReactNode }>;
+}) {
   return (
-    <section className="wallet-panel wallet-history-panel">
-      <div className="wallet-history-title"><span className="wallet-list-icon neutral"><WalletIcon name="history" /></span><div><span className="wallet-section-label">REQUEST HISTORY</span><h2>Recent redemptions</h2></div></div>
-      {withdrawals.length ? <div className="wallet-history-list">{withdrawals.map((withdrawal) => <div key={withdrawal.id}><span><strong>{formatCoins(withdrawal.amount_coins)} coins · {withdrawal.method === "gift_card" ? "Gift card" : "Cash payout"}</strong><small>{formatDate(withdrawal.created_at)}</small></span><b className={`status ${withdrawal.status}`}>{withdrawal.status}</b></div>)}</div> : <p className="wallet-empty">You have not submitted a redemption request yet.</p>}
-    </section>
+    <Panel className="p-6">
+      <div className="flex items-center gap-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control bg-white/5 text-ink-2">
+          <WalletIcon name="history" />
+        </span>
+        <PanelHead label={label} title={title} />
+      </div>
+      {rows.length ? (
+        <div className="mt-5 border-t border-line">
+          {rows.map((row) => (
+            <div key={row.id} className="flex items-center justify-between gap-4 border-b border-line py-3 last:border-b-0">
+              <span className="min-w-0">
+                <span className="block truncate text-sm text-ink-2">{row.title}</span>
+                <span className="mt-0.5 block text-2xs text-ink-4">{row.sub}</span>
+              </span>
+              <span className="shrink-0">{row.right}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-5 border-t border-line pt-4 text-sm leading-relaxed text-ink-4">{empty}</p>
+      )}
+    </Panel>
+  );
+}
+
+function RuleRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-4 border-t border-line py-3">
+      <dt className="text-sm text-ink-3">{label}</dt>
+      <dd className="text-sm font-medium text-ink-2">{value}</dd>
+    </div>
+  );
+}
+
+function PreviewRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-4 border-b border-line py-3 last:border-b-0">
+      <span className="text-sm text-ink-3">{label}</span>
+      <span className="text-sm font-semibold text-positive">{value}</span>
+    </div>
   );
 }
