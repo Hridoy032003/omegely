@@ -218,43 +218,18 @@ export default function WalletPanel() {
   const withdrawalIdempotencyRef = useRef<string | null>(null);
 
   const loadWallet = useCallback(async (currentUser: User) => {
-    // This is deliberately a narrow heartbeat used only for referral
-    // qualification; it is not a browser/device fingerprint.
-    void supabase.rpc("touch_my_last_seen");
-    const anonymousWallet = window.localStorage.getItem("omegley_anonymous_wallet");
-    if (anonymousWallet) {
-      const { data: claimed } = await supabase.rpc("claim_anonymous_wallet", { p_wallet_id: anonymousWallet });
-      if (Number(claimed ?? 0) > 0) window.localStorage.removeItem("omegley_anonymous_wallet");
-    }
-
-    await supabase.rpc("qualify_referrals");
-
-    const [profileResult, transactionsResult, withdrawalsResult, complaintsResult, settingsResult] = await Promise.all([
+    const [profileResult, settingsResult] = await Promise.all([
       supabase
         .from("profiles")
         .select("display_name, referral_code, coin_balance, total_earned, reserved_coins")
         .eq("id", currentUser.id)
         .maybeSingle(),
-      supabase
-        .from("coin_transactions")
-        .select("id, amount, description, created_at")
-        .eq("user_id", currentUser.id)
-        .order("created_at", { ascending: false })
-        .limit(12),
-      supabase
-        .from("withdrawal_requests")
-        .select("id, amount_coins, method, status, created_at")
-        .eq("user_id", currentUser.id)
-        .order("created_at", { ascending: false })
-        .limit(10),
-      supabase
-        .from("withdrawal_complaints")
-        .select("id, withdrawal_id, subject, message, status, admin_reply, created_at")
-        .eq("user_id", currentUser.id)
-        .order("created_at", { ascending: false })
-        .limit(10),
       supabase.rpc("get_public_wallet_settings"),
     ]);
+
+    if (profileResult.error) {
+      throw new Error(`Could not load your coin balance: ${profileResult.error.message}`);
+    }
 
     const profile = profileResult.data;
     const referralCode =
@@ -266,10 +241,6 @@ export default function WalletPanel() {
       totalEarned: Number(profile?.total_earned ?? 0),
       reservedCoins: Number(profile?.reserved_coins ?? 0),
     });
-    setTransactions((transactionsResult.data ?? []) as CoinTransaction[]);
-    setWithdrawals((withdrawalsResult.data ?? []) as WithdrawalRequest[]);
-    setComplaints((complaintsResult.data ?? []) as WithdrawalComplaint[]);
-
     const publicSettings = Array.isArray(settingsResult.data) ? settingsResult.data[0] : settingsResult.data;
     if (publicSettings) {
       const minimum = Number(publicSettings.withdrawal_minimum_coins);
@@ -290,15 +261,60 @@ export default function WalletPanel() {
       setDailySendCount(Number(publicSettings.daily_send_count_limit) || DEFAULT_DAILY_SEND_COUNT);
     }
 
-    if (!profile?.referral_code) {
-      void supabase.rpc("ensure_my_referral_code");
-    }
+    // Show the balance as soon as the critical data is ready. History and
+    // payout lists are secondary and hydrate into the already-visible wallet.
+    setLoading(false);
+    void Promise.all([
+      supabase
+        .from("coin_transactions")
+        .select("id, amount, description, created_at")
+        .eq("user_id", currentUser.id)
+        .order("created_at", { ascending: false })
+        .limit(12),
+      supabase
+        .from("withdrawal_requests")
+        .select("id, amount_coins, method, status, created_at")
+        .eq("user_id", currentUser.id)
+        .order("created_at", { ascending: false })
+        .limit(10),
+      supabase
+        .from("withdrawal_complaints")
+        .select("id, withdrawal_id, subject, message, status, admin_reply, created_at")
+        .eq("user_id", currentUser.id)
+        .order("created_at", { ascending: false })
+        .limit(10),
+    ]).then(([transactionsResult, withdrawalsResult, complaintsResult]) => {
+      setTransactions((transactionsResult.data ?? []) as CoinTransaction[]);
+      setWithdrawals((withdrawalsResult.data ?? []) as WithdrawalRequest[]);
+      setComplaints((complaintsResult.data ?? []) as WithdrawalComplaint[]);
+    }).catch(() => {});
 
-    const pendingReferral = window.localStorage.getItem("omegley_referral_code");
-    if (pendingReferral) {
-      const { data: claimed } = await supabase.rpc("claim_referral", { p_referral_code: pendingReferral });
-      if (claimed) window.localStorage.removeItem("omegley_referral_code");
-    }
+    // Maintenance work must not block the balance query. If an anonymous wallet
+    // is claimed, refresh once so the newly transferred coins appear immediately.
+    void (async () => {
+      void supabase.rpc("touch_my_last_seen");
+      let balanceChanged = false;
+      const anonymousWallet = window.localStorage.getItem("omegley_anonymous_wallet");
+      if (anonymousWallet) {
+        const { data: claimed } = await supabase.rpc("claim_anonymous_wallet", { p_wallet_id: anonymousWallet });
+        if (Number(claimed ?? 0) > 0) {
+          window.localStorage.removeItem("omegley_anonymous_wallet");
+          balanceChanged = true;
+        }
+      }
+      await supabase.rpc("qualify_referrals");
+
+      const pendingReferral = window.localStorage.getItem("omegley_referral_code");
+      if (pendingReferral) {
+        const { data: claimed } = await supabase.rpc("claim_referral", { p_referral_code: pendingReferral });
+        if (claimed) {
+          window.localStorage.removeItem("omegley_referral_code");
+          balanceChanged = true;
+        }
+      }
+      if (!profile?.referral_code) void supabase.rpc("ensure_my_referral_code");
+      if (balanceChanged) void loadWallet(currentUser);
+    })().catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -333,8 +349,8 @@ export default function WalletPanel() {
       }
     };
 
-    void withTimeout(supabase.auth.getUser(), 12000)
-      .then(({ data }) => applyUser(data.user))
+    void withTimeout(supabase.auth.getSession(), 4000)
+      .then(({ data }) => applyUser(data.session?.user ?? null))
       .catch((error: unknown) => {
         if (mounted) {
           setNotice({ tone: "error", text: error instanceof Error ? error.message : "Could not connect to the account service." });
@@ -345,9 +361,9 @@ export default function WalletPanel() {
       void applyUser(session?.user ?? null);
     });
     const refreshOnFocus = () => {
-      void withTimeout(supabase.auth.getUser(), 12000)
+      void withTimeout(supabase.auth.getSession(), 4000)
         .then(({ data: current }) => {
-          if (current.user) void withTimeout(loadWallet(current.user), 12000).catch(() => {});
+          if (current.session?.user) void withTimeout(loadWallet(current.session.user), 12000).catch(() => {});
         })
         .catch(() => {});
     };

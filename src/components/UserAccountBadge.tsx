@@ -8,8 +8,8 @@ import { isSupabaseConfigured, supabase } from "@/lib/supabase-browser";
 type AccountDetails = {
   name: string;
   avatar: string;
-  /** Balance minus coins reserved by a pending payout — the same figure the wallet shows. */
-  availableCoins: number;
+  /** Null means the balance is still loading; never display that as zero. */
+  availableCoins: number | null;
 };
 
 function detailsFromUser(user: User) {
@@ -48,6 +48,7 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number) {
 export default function UserAccountBadge({ compact = false }: { compact?: boolean }) {
   const [account, setAccount] = useState<AccountDetails | null>(null);
   const [anonymousBalance, setAnonymousBalance] = useState<number | null>(null);
+  const [balanceError, setBalanceError] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -82,39 +83,60 @@ export default function UserAccountBadge({ compact = false }: { compact?: boolea
 
       if (mounted) setAnonymousBalance(null);
       const google = detailsFromUser(user);
-      if (mounted) setAccount({ ...google, availableCoins: 0 });
+      if (mounted) {
+        setBalanceError(false);
+        setAccount({ ...google, availableCoins: null });
+      }
 
-      const { data } = await withTimeout(
-        supabase
-          .from("profiles")
-          .select("display_name, avatar_url, coin_balance, reserved_coins")
-          .eq("id", user.id)
-          .maybeSingle(),
-        12000,
-      );
+      let result: {
+        data: {
+          display_name: string | null;
+          avatar_url: string | null;
+          coin_balance: number | null;
+          reserved_coins: number | null;
+        } | null;
+        error: { message: string } | null;
+      };
+      try {
+        result = await withTimeout(
+          supabase
+            .from("profiles")
+            .select("display_name, avatar_url, coin_balance, reserved_coins")
+            .eq("id", user.id)
+            .maybeSingle(),
+          12000,
+        );
+      } catch {
+        if (mounted) setBalanceError(true);
+        return;
+      }
 
       if (!mounted) return;
+      if (result.error) {
+        setBalanceError(true);
+        return;
+      }
       setAccount({
-        name: data?.display_name || google.name,
-        avatar: google.avatar || data?.avatar_url || "",
-        availableCoins: Math.max(0, Number(data?.coin_balance ?? 0) - Number(data?.reserved_coins ?? 0)),
+        name: result.data?.display_name || google.name,
+        avatar: google.avatar || result.data?.avatar_url || "",
+        availableCoins: Math.max(0, Number(result.data?.coin_balance ?? 0) - Number(result.data?.reserved_coins ?? 0)),
       });
     };
 
-    void withTimeout(supabase.auth.getUser(), 12000)
-      .then(({ data }) => loadAccount(data.user))
+    void withTimeout(supabase.auth.getSession(), 4000)
+      .then(({ data }) => loadAccount(data.session?.user ?? null))
       .catch(() => {});
     const refreshWallet = () => {
-      void withTimeout(supabase.auth.getUser(), 12000)
-        .then(({ data }) => loadAccount(data.user))
+      void withTimeout(supabase.auth.getSession(), 4000)
+        .then(({ data }) => loadAccount(data.session?.user ?? null))
         .catch(() => {});
     };
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       window.setTimeout(() => void loadAccount(session?.user ?? null), 0);
     });
     const refreshOnFocus = () => {
-      void withTimeout(supabase.auth.getUser(), 12000)
-        .then(({ data: current }) => loadAccount(current.user))
+      void withTimeout(supabase.auth.getSession(), 4000)
+        .then(({ data: current }) => loadAccount(current.session?.user ?? null))
         .catch(() => {});
     };
     window.addEventListener("focus", refreshOnFocus);
@@ -160,17 +182,19 @@ export default function UserAccountBadge({ compact = false }: { compact?: boolea
   }
 
   const initials = account.name.trim().slice(0, 1).toUpperCase() || "U";
+  const balanceLoading = account.availableCoins === null && !balanceError;
+  const balanceUnavailable = account.availableCoins === null && balanceError;
 
   return (
     <div className="inline-flex items-center gap-1.5">
       <span className="group relative inline-flex">
         <Link
           href="/wallet"
-          aria-label={`${account.availableCoins.toLocaleString()} coins. 100 coins = 1 dollar. Open your wallet.`}
-          className="inline-flex items-center gap-1.5 rounded-full border border-positive/25 bg-positive/10 px-2.5 py-1.5 text-2xs font-semibold text-positive transition hover:border-positive/50 hover:bg-positive/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-positive/60"
+          aria-label={balanceLoading ? "Loading coin balance" : balanceUnavailable ? "Coin balance unavailable" : `${account.availableCoins.toLocaleString()} coins. 100 coins = 1 dollar. Open your wallet.`}
+          className="inline-flex min-w-16 items-center justify-center gap-1.5 rounded-full border border-positive/25 bg-positive/10 px-2.5 py-1.5 text-2xs font-semibold text-positive transition hover:border-positive/50 hover:bg-positive/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-positive/60"
         >
-          {account.availableCoins.toLocaleString()}
-          <span className="hidden sm:inline">coins</span>
+          {balanceLoading ? <span className="h-3 w-8 animate-pulse rounded bg-positive/30" aria-hidden="true" /> : balanceUnavailable ? "—" : account.availableCoins.toLocaleString()}
+          {!balanceLoading && !balanceUnavailable && <span className="hidden sm:inline">coins</span>}
         </Link>
         <span
           role="tooltip"

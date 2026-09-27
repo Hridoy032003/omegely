@@ -119,11 +119,13 @@ export default function AccountPanel() {
     }
     await supabase.rpc("qualify_referrals");
 
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("profiles")
       .select("display_name, avatar_url, bio, interests, profile_visibility, referral_code, coin_balance, total_earned, reserved_coins")
       .eq("id", currentUser.id)
       .maybeSingle();
+
+    if (error) throw new Error(`Could not load your account balance: ${error.message}`);
 
     const fallbackReferralCode = data?.referral_code || currentUser.id.replaceAll("-", "").slice(0, 10);
     setProfile({
