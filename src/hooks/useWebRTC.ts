@@ -598,11 +598,12 @@ export function useWebRTC() {
       // Keep the block active for this session if storage is unavailable.
     }
     sendTo(partnerId, MSG.BYE, {});
+    settleConnectionReward();
     teardownPeer();
     partnerRef.current = null;
     setMessages([]);
     beginSearch();
-  }, [beginSearch, sendTo, teardownPeer]);
+  }, [beginSearch, sendTo, settleConnectionReward, teardownPeer]);
 
   const onPartnerLeft = useCallback(() => {
     settleConnectionReward();
