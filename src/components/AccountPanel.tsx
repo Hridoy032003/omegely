@@ -101,6 +101,7 @@ export default function AccountPanel() {
   const [editing, setEditing] = useState(false);
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [busy, setBusy] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
 
   const loadProfile = useCallback(async (currentUser: User) => {
     const google = googleDetails(currentUser);
@@ -151,34 +152,80 @@ export default function AccountPanel() {
   }, []);
 
   useEffect(() => {
+    let mounted = true;
     const params = new URLSearchParams(window.location.search);
     const referralCode = params.get("ref");
     if (params.get("mode") === "signup") setMode("signup");
     if (referralCode) window.localStorage.setItem("omegley_referral_code", referralCode.toLowerCase());
 
-    void supabase.auth.getUser().then(({ data }) => {
-      setUser(data.user ?? null);
-      if (data.user) void loadProfile(data.user);
-    });
+    if (!isSupabaseConfigured) {
+      setAuthLoading(false);
+      setFeedback({ tone: "error", text: "Account access is not configured on this deployment. Add the public Supabase URL and publishable key, then redeploy." });
+      return () => {
+        mounted = false;
+      };
+    }
+
+    const applySession = async (currentUser: User | null) => {
+      if (!mounted) return;
+      setUser(currentUser);
+      try {
+        if (currentUser) await withTimeout(loadProfile(currentUser), 12000);
+        else setProfile(EMPTY_PROFILE);
+      } catch (error) {
+        if (mounted) {
+          setFeedback({ tone: "error", text: error instanceof Error ? error.message : "Could not load your account. Please refresh and try again." });
+        }
+      } finally {
+        if (mounted) setAuthLoading(false);
+      }
+    };
+
+    void withTimeout(supabase.auth.getUser(), 12000)
+      .then(({ data }) => applySession(data.user ?? null))
+      .catch((error: unknown) => {
+        if (mounted) {
+          setAuthLoading(false);
+          setFeedback({ tone: "error", text: error instanceof Error ? error.message : "Could not connect to the account service." });
+        }
+      });
 
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      if (session?.user) void loadProfile(session.user);
-      else setProfile(EMPTY_PROFILE);
+      // Let Supabase finish its auth callback before making profile/RPC requests.
+      // Starting another Supabase request inside this callback can contend for
+      // the auth lock and make the account page appear to hang.
+      window.setTimeout(() => void applySession(session?.user ?? null), 0);
     });
 
     const refreshOnFocus = () => {
-      void supabase.auth.getUser().then(({ data: current }) => {
-        if (current.user) void loadProfile(current.user);
-      });
+      void withTimeout(supabase.auth.getUser(), 12000)
+        .then(({ data: current }) => {
+          if (current.user) void applySession(current.user);
+        })
+        .catch(() => {});
     };
     window.addEventListener("focus", refreshOnFocus);
 
     return () => {
+      mounted = false;
       data.subscription.unsubscribe();
       window.removeEventListener("focus", refreshOnFocus);
     };
   }, [loadProfile]);
+
+  const signOut = async () => {
+    if (!isSupabaseConfigured) return;
+    setBusy(true);
+    setFeedback(null);
+    try {
+      const { error } = await withTimeout(supabase.auth.signOut(), 12000);
+      if (error) setFeedback({ tone: "error", text: error.message });
+    } catch (error) {
+      setFeedback({ tone: "error", text: error instanceof Error ? error.message : "Could not sign out. Please try again." });
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const authenticate = async (event: FormEvent) => {
     event.preventDefault();
@@ -219,34 +266,55 @@ export default function AccountPanel() {
   };
 
   const signInWithGoogle = async () => {
+    if (!isSupabaseConfigured) {
+      setFeedback({ tone: "error", text: "Account access is not configured on this deployment. Add the public Supabase URL and publishable key, then redeploy." });
+      return;
+    }
     setFeedback(null);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: `${window.location.origin}/account` },
-    });
-    if (error) setFeedback({ tone: "error", text: error.message });
+    setBusy(true);
+    try {
+      const { error } = await withTimeout(
+        supabase.auth.signInWithOAuth({
+          provider: "google",
+          options: { redirectTo: `${window.location.origin}/account` },
+        }),
+        15000,
+      );
+      if (error) setFeedback({ tone: "error", text: error.message });
+    } catch (error) {
+      setFeedback({ tone: "error", text: error instanceof Error ? error.message : "Could not reach the account service. Try again." });
+    } finally {
+      setBusy(false);
+    }
   };
 
   const saveProfile = async (event: FormEvent) => {
     event.preventDefault();
     if (!user) return;
     setBusy(true);
-    const { error } = await supabase
-      .from("profiles")
-      .update({
-        display_name: profile.display_name?.trim() || null,
-        avatar_url: profile.avatar_url?.trim() || null,
-        bio: profile.bio?.trim() || null,
-        interests: profile.interests ?? [],
-        profile_visibility: profile.profile_visibility,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", user.id);
+    try {
+      const { error } = await withTimeout(
+        supabase
+          .from("profiles")
+          .update({
+            display_name: profile.display_name?.trim() || null,
+            avatar_url: profile.avatar_url?.trim() || null,
+            bio: profile.bio?.trim() || null,
+            interests: profile.interests ?? [],
+            profile_visibility: profile.profile_visibility,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", user.id),
+        12000,
+      );
 
-    if (error) setFeedback({ tone: "error", text: error.message });
-    else {
-      setFeedback({ tone: "success", text: "Profile saved." });
-      setEditing(false);
+      if (error) setFeedback({ tone: "error", text: error.message });
+      else {
+        setFeedback({ tone: "success", text: "Profile saved." });
+        setEditing(false);
+      }
+    } catch (error) {
+      setFeedback({ tone: "error", text: error instanceof Error ? error.message : "Could not save your profile. Please try again." });
     }
     setBusy(false);
   };
@@ -258,6 +326,18 @@ export default function AccountPanel() {
       ? "Google"
       : "Email and password";
   const availableCoins = Math.max(0, profile.coin_balance - profile.reserved_coins);
+
+  if (authLoading) {
+    return (
+      <main className="min-h-dvh">
+        <PageGlow />
+        <AppHeader />
+        <div className="container-page flex min-h-[60vh] items-center justify-center">
+          <p className="text-sm text-ink-3" role="status" aria-live="polite">Checking your account…</p>
+        </div>
+      </main>
+    );
+  }
 
   if (!user) {
     return (
@@ -299,6 +379,11 @@ export default function AccountPanel() {
           </div>
 
           <Panel className="p-6 sm:p-7">
+            {!isSupabaseConfigured && (
+              <Notice tone="error">
+                Account access is temporarily unavailable because the authentication service is not configured.
+              </Notice>
+            )}
             <div
               role="tablist"
               aria-label="Account access"
@@ -361,7 +446,7 @@ export default function AccountPanel() {
               <span className="h-px flex-1 bg-line" />
             </div>
 
-            <Button variant="outline" block onClick={() => void signInWithGoogle()} type="button">
+            <Button variant="outline" block disabled={busy} onClick={() => void signInWithGoogle()} type="button">
               <GoogleMark /> Continue with Google
             </Button>
 
@@ -387,9 +472,10 @@ export default function AccountPanel() {
           <button
             type="button"
             className="text-sm text-ink-2 transition-colors hover:text-ink"
-            onClick={() => void supabase.auth.signOut()}
+            disabled={busy}
+            onClick={() => void signOut()}
           >
-            Sign out
+            {busy ? "Signing out…" : "Sign out"}
           </button>
         }
       />

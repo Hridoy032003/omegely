@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
-import { supabase } from "@/lib/supabase-browser";
+import { isSupabaseConfigured, supabase } from "@/lib/supabase-browser";
 
 type AccountDetails = {
   name: string;
@@ -29,12 +29,35 @@ function detailsFromUser(user: User) {
   return { name, avatar };
 }
 
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number) {
+  return new Promise<T>((resolve, reject) => {
+    const timeout = window.setTimeout(() => reject(new Error("Account service timed out.")), timeoutMs);
+    promise.then(
+      (value) => {
+        window.clearTimeout(timeout);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timeout);
+        reject(error);
+      },
+    );
+  });
+}
+
 export default function UserAccountBadge({ compact = false }: { compact?: boolean }) {
   const [account, setAccount] = useState<AccountDetails | null>(null);
   const [anonymousBalance, setAnonymousBalance] = useState<number | null>(null);
 
   useEffect(() => {
     let mounted = true;
+
+    if (!isSupabaseConfigured) {
+      setAnonymousBalance(0);
+      return () => {
+        mounted = false;
+      };
+    }
 
     const loadAnonymousBalance = async () => {
       const walletId = window.localStorage.getItem("omegley_anonymous_wallet");
@@ -61,11 +84,14 @@ export default function UserAccountBadge({ compact = false }: { compact?: boolea
       const google = detailsFromUser(user);
       if (mounted) setAccount({ ...google, availableCoins: 0 });
 
-      const { data } = await supabase
-        .from("profiles")
-        .select("display_name, avatar_url, coin_balance, reserved_coins")
-        .eq("id", user.id)
-        .maybeSingle();
+      const { data } = await withTimeout(
+        supabase
+          .from("profiles")
+          .select("display_name, avatar_url, coin_balance, reserved_coins")
+          .eq("id", user.id)
+          .maybeSingle(),
+        12000,
+      );
 
       if (!mounted) return;
       setAccount({
@@ -75,15 +101,21 @@ export default function UserAccountBadge({ compact = false }: { compact?: boolea
       });
     };
 
-    void supabase.auth.getUser().then(({ data }) => void loadAccount(data.user));
+    void withTimeout(supabase.auth.getUser(), 12000)
+      .then(({ data }) => loadAccount(data.user))
+      .catch(() => {});
     const refreshWallet = () => {
-      void supabase.auth.getUser().then(({ data }) => void loadAccount(data.user));
+      void withTimeout(supabase.auth.getUser(), 12000)
+        .then(({ data }) => loadAccount(data.user))
+        .catch(() => {});
     };
-    const { data } = supabase.auth.onAuthStateChange((_event, session) =>
-      void loadAccount(session?.user ?? null),
-    );
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      window.setTimeout(() => void loadAccount(session?.user ?? null), 0);
+    });
     const refreshOnFocus = () => {
-      void supabase.auth.getUser().then(({ data: current }) => void loadAccount(current.user));
+      void withTimeout(supabase.auth.getUser(), 12000)
+        .then(({ data: current }) => loadAccount(current.user))
+        .catch(() => {});
     };
     window.addEventListener("focus", refreshOnFocus);
     window.addEventListener("omegley:wallet-updated", refreshWallet);
