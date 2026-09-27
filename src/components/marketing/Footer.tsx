@@ -20,12 +20,21 @@ const COLUMNS = [
       { href: "/guidelines", label: "Community Guidelines" },
     ],
   },
+  {
+    title: "Earn & payouts",
+    links: [
+      { href: "/earn", label: "How earning works" },
+      { href: "/referrals", label: "Referral rewards" },
+      { href: "/coins", label: "Coins & wallet" },
+      { href: "/payment-policy", label: "Payment policy" },
+    ],
+  },
 ];
 
 export default function Footer() {
   return (
     <footer className="border-t border-white/10 bg-neutral-950">
-      <div className="container-page grid gap-10 py-14 sm:grid-cols-2 lg:grid-cols-[1.6fr_repeat(3,minmax(0,1fr))]">
+      <div className="container-page grid gap-10 py-14 sm:grid-cols-2 lg:grid-cols-[1.4fr_repeat(4,minmax(0,1fr))]">
         <div className="sm:col-span-2 lg:col-span-1">
           <Link href="/" className="flex w-fit items-center gap-2 font-display text-lg font-bold">
             <LogoMark className="h-8 w-8" title="Omegley" />
