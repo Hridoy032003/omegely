@@ -168,7 +168,7 @@ export default function UserAccountBadge({ compact = false }: { compact?: boolea
           >
             {(anonymousBalance ?? 0) > 0
               ? "Your anonymous rewards are saved. Sign in to claim them."
-              : "Complete a connection to earn 10 coins. Sign in to claim rewards."}
+              : "Stay connected for 30 seconds to earn coins. Sign in to claim rewards."}
           </span>
         </span>
         <Link

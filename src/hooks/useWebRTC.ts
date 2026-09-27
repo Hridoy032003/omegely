@@ -44,6 +44,8 @@ const CHANNEL_SETUP_TIMEOUT_MS = 8000;
 const COOLDOWN_KEEP_MS = 60_000; // forget who we skipped after a minute
 const MAX_INBOUND_CHARS = 1000; // a peer can't flood the chat log with one message
 const PEER_RECOVERY_GRACE_MS = 6000; // ICE often self-heals; only re-queue if it doesn't
+const CONNECTION_REWARD_MIN_MS = 30_000;
+const CONNECTION_QUALIFIED_MESSAGE = "__omegley_connection_qualified__";
 
 function withTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -146,6 +148,11 @@ export function useWebRTC() {
   const helloTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startInFlightRef = useRef(false);
   const connectionEventRef = useRef<string | null>(null);
+  const connectionStartedAtRef = useRef<number | null>(null);
+  const connectionQualifiedRef = useRef(false);
+  const partnerQualifiedRef = useRef(false);
+  const connectionRewardedRef = useRef(false);
+  const connectionRewardTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recoveryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Set once `onPartnerLeft` exists; lets the peer connection re-queue us on failure. */
   const peerFailureRef = useRef<(() => void) | null>(null);
@@ -165,9 +172,17 @@ export function useWebRTC() {
     ]);
   }, []);
 
+  const clearConnectionRewardTimer = useCallback(() => {
+    if (connectionRewardTimerRef.current) {
+      clearTimeout(connectionRewardTimerRef.current);
+      connectionRewardTimerRef.current = null;
+    }
+  }, []);
+
   const rewardCompletedConnection = useCallback(() => {
     const eventKey = connectionEventRef.current;
-    if (!eventKey) return;
+    if (!eventKey || !connectionQualifiedRef.current || !partnerQualifiedRef.current || connectionRewardedRef.current) return;
+    connectionRewardedRef.current = true;
     connectionEventRef.current = null;
     void (async () => {
       try {
@@ -190,6 +205,39 @@ export function useWebRTC() {
     })();
   }, []);
 
+  const resetConnectionRewardState = useCallback(() => {
+    clearConnectionRewardTimer();
+    connectionEventRef.current = null;
+    connectionStartedAtRef.current = null;
+    connectionQualifiedRef.current = false;
+    partnerQualifiedRef.current = false;
+    connectionRewardedRef.current = false;
+  }, [clearConnectionRewardTimer]);
+
+  const settleConnectionReward = useCallback(() => {
+    rewardCompletedConnection();
+    resetConnectionRewardState();
+  }, [resetConnectionRewardState, rewardCompletedConnection]);
+
+  const maybeQualifyConnection = useCallback(() => {
+    const startedAt = connectionStartedAtRef.current;
+    const channel = dcRef.current;
+    if (!startedAt || !channel || channel.readyState !== "open" || connectionQualifiedRef.current) {
+      return;
+    }
+
+    const remaining = CONNECTION_REWARD_MIN_MS - (Date.now() - startedAt);
+    if (remaining > 0) {
+      clearConnectionRewardTimer();
+      connectionRewardTimerRef.current = setTimeout(maybeQualifyConnection, remaining);
+      return;
+    }
+
+    connectionQualifiedRef.current = true;
+    channel.send(CONNECTION_QUALIFIED_MESSAGE);
+    rewardCompletedConnection();
+  }, [clearConnectionRewardTimer, rewardCompletedConnection]);
+
   /** Publish a message to another client's private inbox channel. */
   const sendTo = useCallback((toId: string, name: string, payload: object) => {
     const client = clientRef.current;
@@ -211,16 +259,25 @@ export function useWebRTC() {
     (channel: RTCDataChannel) => {
       dcRef.current = channel;
       setChatReady(channel.readyState === "open");
-      channel.onopen = () => setChatReady(true);
+      if (channel.readyState === "open") maybeQualifyConnection();
+      channel.onopen = () => {
+        setChatReady(true);
+        maybeQualifyConnection();
+      };
       channel.onclose = () => setChatReady(false);
       channel.onerror = () => setChatReady(false);
       channel.onmessage = (event) => {
+        if (String(event.data) === CONNECTION_QUALIFIED_MESSAGE) {
+          partnerQualifiedRef.current = true;
+          maybeQualifyConnection();
+          return;
+        }
         // Trust nothing about size: the peer controls this string.
         const text = String(event.data).slice(0, MAX_INBOUND_CHARS).trim();
         if (text) addMessage("them", text);
       };
     },
-    [addMessage],
+    [addMessage, maybeQualifyConnection],
   );
 
   const flushPendingCandidates = useCallback(async () => {
@@ -296,6 +353,8 @@ export function useWebRTC() {
 
         if (state === "connected") {
           setPeerUnstable(false);
+          if (!connectionStartedAtRef.current) connectionStartedAtRef.current = Date.now();
+          maybeQualifyConnection();
         } else if (state === "disconnected") {
           // Usually transient — give ICE a chance to recover before re-queuing.
           setPeerUnstable(true);
@@ -319,7 +378,7 @@ export function useWebRTC() {
 
       return pc;
     },
-    [sendSignal, wireDataChannel],
+    [maybeQualifyConnection, sendSignal, wireDataChannel],
   );
 
   const handleSignal = useCallback(
@@ -447,6 +506,11 @@ export function useWebRTC() {
       setPartnerCountry(country);
       setPartnerProfile(sanitizePublicProfile(profile));
       connectionEventRef.current = crypto.randomUUID();
+      connectionStartedAtRef.current = null;
+      connectionQualifiedRef.current = false;
+      partnerQualifiedRef.current = false;
+      connectionRewardedRef.current = false;
+      clearConnectionRewardTimer();
       setStatusBoth("connected");
 
       const initiator = myIdRef.current < partnerId;
@@ -457,7 +521,7 @@ export function useWebRTC() {
         sendSignal({ type: "offer", sdp: offer });
       }
     },
-    [clearPending, createPeerConnection, sendSignal, setStatusBoth, stopHello],
+    [clearConnectionRewardTimer, clearPending, createPeerConnection, sendSignal, setStatusBoth, stopHello],
   );
 
   /** React to another user's `hello`: request a match if we're free. */
@@ -541,12 +605,12 @@ export function useWebRTC() {
   }, [beginSearch, sendTo, teardownPeer]);
 
   const onPartnerLeft = useCallback(() => {
-    rewardCompletedConnection();
+    settleConnectionReward();
     if (partnerRef.current) cooldownRef.current.set(partnerRef.current, Date.now());
     teardownPeer();
     partnerRef.current = null;
     beginSearch();
-  }, [beginSearch, rewardCompletedConnection, teardownPeer]);
+  }, [beginSearch, settleConnectionReward, teardownPeer]);
 
   useEffect(() => {
     peerFailureRef.current = onPartnerLeft;
@@ -801,7 +865,7 @@ export function useWebRTC() {
   }, [beginSearch, clearPending, handleInbox, loadPublicProfile, maybeRequest, refreshOnline, scanLobby, setStatusBoth, stopHello, teardownPeer]);
 
   const next = useCallback(() => {
-    rewardCompletedConnection();
+    settleConnectionReward();
     if (partnerRef.current) {
       sendTo(partnerRef.current, MSG.BYE, {});
       cooldownRef.current.set(partnerRef.current, Date.now());
@@ -811,10 +875,10 @@ export function useWebRTC() {
     setPartnerClientId(null);
     setMessages([]);
     beginSearch();
-  }, [beginSearch, rewardCompletedConnection, sendTo, teardownPeer]);
+  }, [beginSearch, sendTo, settleConnectionReward, teardownPeer]);
 
   const stop = useCallback(() => {
-    rewardCompletedConnection();
+    settleConnectionReward();
     if (partnerRef.current) sendTo(partnerRef.current, MSG.BYE, {});
     stopHello();
     clearPending();
@@ -844,7 +908,7 @@ export function useWebRTC() {
     setChatReady(false);
     setPeerUnstable(false);
     setStatusBoth("idle");
-  }, [clearPending, rewardCompletedConnection, sendTo, setStatusBoth, stopHello, teardownPeer]);
+  }, [clearPending, sendTo, setStatusBoth, settleConnectionReward, stopHello, teardownPeer]);
 
   const sendMessage = useCallback(
     (text: string) => {
@@ -884,11 +948,11 @@ export function useWebRTC() {
         void lobbyRef.current.presence.leave().catch(() => {});
       }
       teardownPeer();
-      rewardCompletedConnection();
+      settleConnectionReward();
       localStreamRef.current?.getTracks().forEach((t) => t.stop());
       clientRef.current?.close();
     };
-  }, [clearPending, rewardCompletedConnection, stopHello, teardownPeer]);
+  }, [clearPending, settleConnectionReward, stopHello, teardownPeer]);
 
   return {
     status,

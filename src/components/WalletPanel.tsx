@@ -693,7 +693,7 @@ export default function WalletPanel() {
             </p>
             <p className="mt-1 text-sm text-ink-3">100 coins = 1 dollar</p>
             <div className="mt-6 border-t border-line">
-              <PreviewRow label="Complete a connection" value={`+${connectionReward}`} />
+              <PreviewRow label="Mutual connection (30 sec)" value={`+${connectionReward}`} />
               <PreviewRow label="Qualified referral" value={`+${referralReward}`} />
             </div>
           </Panel>
@@ -847,8 +847,8 @@ export default function WalletPanel() {
                   <EarnRow
                     icon="chat"
                     tone="text-brand-ink bg-brand-soft"
-                    title="Complete a connection"
-                    body="Connect with someone in random chat. There is no minimum duration."
+                    title="Complete a mutual connection"
+                    body="Stay connected with the same person for at least 30 seconds. Both peers must remain connected before the reward is issued."
                     reward={`+${connectionReward}`}
                     href="/chat"
                     hrefLabel="Start chatting"
