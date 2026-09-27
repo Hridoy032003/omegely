@@ -29,7 +29,7 @@ function detailsFromUser(user: User) {
   return { name, avatar };
 }
 
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number) {
+function withTimeout<T>(promise: PromiseLike<T>, timeoutMs: number) {
   return new Promise<T>((resolve, reject) => {
     const timeout = window.setTimeout(() => reject(new Error("Account service timed out.")), timeoutMs);
     promise.then(
@@ -98,12 +98,28 @@ export default function UserAccountBadge({ compact = false }: { compact?: boolea
         error: { message: string } | null;
       };
       try {
-        result = await withTimeout(
+        result = await withTimeout<{
+          data: {
+            display_name: string | null;
+            avatar_url: string | null;
+            coin_balance: number | null;
+            reserved_coins: number | null;
+          } | null;
+          error: { message: string } | null;
+        }>(
           supabase
             .from("profiles")
             .select("display_name, avatar_url, coin_balance, reserved_coins")
             .eq("id", user.id)
-            .maybeSingle(),
+            .maybeSingle() as unknown as PromiseLike<{
+              data: {
+                display_name: string | null;
+                avatar_url: string | null;
+                coin_balance: number | null;
+                reserved_coins: number | null;
+              } | null;
+              error: { message: string } | null;
+            }>,
           12000,
         );
       } catch {
@@ -182,18 +198,19 @@ export default function UserAccountBadge({ compact = false }: { compact?: boolea
   }
 
   const initials = account.name.trim().slice(0, 1).toUpperCase() || "U";
-  const balanceLoading = account.availableCoins === null && !balanceError;
-  const balanceUnavailable = account.availableCoins === null && balanceError;
+  const availableCoins = account.availableCoins;
+  const balanceLoading = availableCoins === null && !balanceError;
+  const balanceUnavailable = availableCoins === null && balanceError;
 
   return (
     <div className="inline-flex items-center gap-1.5">
       <span className="group relative inline-flex">
         <Link
           href="/wallet"
-          aria-label={balanceLoading ? "Loading coin balance" : balanceUnavailable ? "Coin balance unavailable" : `${account.availableCoins.toLocaleString()} coins. 100 coins = 1 dollar. Open your wallet.`}
+          aria-label={balanceLoading ? "Loading coin balance" : balanceUnavailable ? "Coin balance unavailable" : `${availableCoins.toLocaleString()} coins. 100 coins = 1 dollar. Open your wallet.`}
           className="inline-flex min-w-16 items-center justify-center gap-1.5 rounded-full border border-positive/25 bg-positive/10 px-2.5 py-1.5 text-2xs font-semibold text-positive transition hover:border-positive/50 hover:bg-positive/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-positive/60"
         >
-          {balanceLoading ? <span className="h-3 w-8 animate-pulse rounded bg-positive/30" aria-hidden="true" /> : balanceUnavailable ? "—" : account.availableCoins.toLocaleString()}
+          {balanceLoading ? <span className="h-3 w-8 animate-pulse rounded bg-positive/30" aria-hidden="true" /> : balanceUnavailable ? "—" : availableCoins.toLocaleString()}
           {!balanceLoading && !balanceUnavailable && <span className="hidden sm:inline">coins</span>}
         </Link>
         <span

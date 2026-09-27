@@ -62,7 +62,7 @@ function googleDetails(user: User) {
   return { name, avatar };
 }
 
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number) {
+function withTimeout<T>(promise: PromiseLike<T>, timeoutMs: number) {
   return new Promise<T>((resolve, reject) => {
     const timeout = window.setTimeout(
       () => reject(new Error("Authentication is taking too long. Check your connection and try again.")),
@@ -295,7 +295,7 @@ export default function AccountPanel() {
     if (!user) return;
     setBusy(true);
     try {
-      const { error } = await withTimeout(
+      const { error } = await withTimeout<{ error: { message: string } | null }>(
         supabase
           .from("profiles")
           .update({
@@ -306,7 +306,7 @@ export default function AccountPanel() {
             profile_visibility: profile.profile_visibility,
             updated_at: new Date().toISOString(),
           })
-          .eq("id", user.id),
+          .eq("id", user.id) as unknown as PromiseLike<{ error: { message: string } | null }>,
         12000,
       );
 
